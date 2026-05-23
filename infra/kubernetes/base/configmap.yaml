@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forge-config
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: forge
+    app.kubernetes.io/managed-by: kustomize
+data:
+  # ─────────────────────────────────────────────
+  # Application
+  # ─────────────────────────────────────────────
+  APP_NAME: "FORGE"
+  APP_VERSION: "0.1.0"
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+
+  # ─────────────────────────────────────────────
+  # API settings
+  # ─────────────────────────────────────────────
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  API_WORKERS: "4"
+  API_PREFIX: "/api/v1"
+
+  # ─────────────────────────────────────────────
+  # Logging & Observability
+  # ─────────────────────────────────────────────
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  PROMETHEUS_ENABLED: "true"
+  PROMETHEUS_PORT: "9090"
+  OTEL_SERVICE_NAME: "forge-api"
+  OTEL_PYTHON_LOG_CORRELATION: "true"
+
+  # ─────────────────────────────────────────────
+  # Database connection pool
+  # ─────────────────────────────────────────────
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "40"
+  DATABASE_POOL_TIMEOUT: "30"
+  DATABASE_POOL_RECYCLE: "1800"
+  DATABASE_ECHO: "false"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "forge"
+
+  # ─────────────────────────────────────────────
+  # Redis
+  # ─────────────────────────────────────────────
+  REDIS_MAX_CONNECTIONS: "100"
+
+  # ─────────────────────────────────────────────
+  # Celery
+  # ─────────────────────────────────────────────
+  CELERY_TASK_SERIALIZER: "json"
+  CELERY_RESULT_SERIALIZER: "json"
+  CELERY_ACCEPT_CONTENT: "json"
+  CELERY_TIMEZONE: "UTC"
+  CELERY_ENABLE_UTC: "true"
+  CELERY_TASK_TRACK_STARTED: "true"
+  CELERY_TASK_TIME_LIMIT: "3600"
+  CELERY_TASK_SOFT_TIME_LIMIT: "3300"
+  CELERY_WORKER_CONCURRENCY: "4"
+  CELERY_WORKER_MAX_TASKS_PER_CHILD: "1000"
+
+  # ─────────────────────────────────────────────
+  # Neo4j
+  # ─────────────────────────────────────────────
+  NEO4J_DATABASE: "neo4j"
+  NEO4J_MAX_CONNECTION_POOL_SIZE: "50"
+  NEO4J_CONNECTION_TIMEOUT: "30"
+
+  # ─────────────────────────────────────────────
+  # Temporal
+  # ─────────────────────────────────────────────
+  TEMPORAL_NAMESPACE: "forge-default"
+  TEMPORAL_TASK_QUEUE: "forge-main"
+  TEMPORAL_MAX_CONCURRENT_ACTIVITIES: "100"
+  TEMPORAL_MAX_CONCURRENT_WORKFLOWS: "50"
+
+  # ─────────────────────────────────────────────
+  # LLM defaults
+  # ─────────────────────────────────────────────
+  DEFAULT_LLM_PROVIDER: "anthropic"
+  DEFAULT_LLM_MODEL: "claude-3-5-sonnet-20241022"
+  DEFAULT_EMBEDDING_MODEL: "text-embedding-3-small"
+  LLM_MAX_TOKENS: "8192"
+  LLM_TEMPERATURE: "0.1"
+  LLM_MAX_RETRIES: "3"
+
+  # ─────────────────────────────────────────────
+  # Security
+  # ─────────────────────────────────────────────
+  JWT_ALGORITHM: "HS256"
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  JWT_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_PERIOD: "60"
+
+  # ─────────────────────────────────────────────
+  # AWS
+  # ─────────────────────────────────────────────
+  AWS_REGION: "us-east-1"
+  AWS_S3_REGION: "us-east-1"

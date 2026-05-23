@@ -1,0 +1,141 @@
+repos:
+  # ─────────────────────────────────────────────
+  # General file hygiene
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+        exclude: '^(\.env\.example)$'
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+        exclude: '^(frontend/|\.vscode/).*\.json$'
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+      - id: pretty-format-json
+        args: [--autofix, --indent=2]
+        exclude: '^(frontend/|package-lock\.json).*'
+      - id: check-docstring-first
+      - id: debug-statements
+
+  # ─────────────────────────────────────────────
+  # Ruff - Python linting and formatting
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+        exclude: '^(alembic/versions/).*'
+      - id: ruff-format
+        name: ruff (format)
+        types_or: [python, pyi]
+        exclude: '^(alembic/versions/).*'
+
+  # ─────────────────────────────────────────────
+  # Mypy - Type checking
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: mypy (type check)
+        args:
+          - --config-file=pyproject.toml
+          - --ignore-missing-imports
+        additional_dependencies:
+          - pydantic>=2.9
+          - pydantic-settings>=2.6
+          - sqlalchemy[asyncio]>=2.0
+          - types-passlib
+          - types-python-jose
+          - types-redis
+          - fastapi>=0.115
+          - types-requests
+        exclude: '^(tests/|alembic/|scripts/).*'
+
+  # ─────────────────────────────────────────────
+  # Security scanning
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        name: bandit (security)
+        args: [-c, pyproject.toml, -ll]
+        exclude: '^tests/.*'
+
+  # ─────────────────────────────────────────────
+  # Secrets detection
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets
+        args:
+          - --baseline
+          - .secrets.baseline
+        exclude: '^(\.env\.example|tests/fixtures/).*'
+
+  # ─────────────────────────────────────────────
+  # YAML / JSON / TOML validation
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        name: yamllint
+        args: [-d, relaxed]
+        exclude: '^(frontend/).*'
+
+  # ─────────────────────────────────────────────
+  # Dockerfile linting
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+        name: hadolint (Dockerfile lint)
+        args: [--ignore, DL3008, --ignore, DL3013, --ignore, SC2028]
+
+  # ─────────────────────────────────────────────
+  # Shell script linting
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        args: [--severity=warning]
+
+  # ─────────────────────────────────────────────
+  # Terraform formatting
+  # ─────────────────────────────────────────────
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.1
+    hooks:
+      - id: terraform_fmt
+        name: terraform fmt
+      - id: terraform_validate
+        name: terraform validate
+
+default_stages: [pre-commit]
+fail_fast: false
+minimum_pre_commit_version: "3.0.0"

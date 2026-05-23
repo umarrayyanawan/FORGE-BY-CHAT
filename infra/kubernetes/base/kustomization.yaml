@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: forge-base
+  annotations:
+    description: "FORGE - Base Kustomize configuration"
+
+# ─────────────────────────────────────────────
+# Namespace for all resources
+# ─────────────────────────────────────────────
+namespace: forge-system
+
+# ─────────────────────────────────────────────
+# Resources
+# ─────────────────────────────────────────────
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - worker-deployment.yaml
+
+# ─────────────────────────────────────────────
+# Common labels applied to all resources
+# ─────────────────────────────────────────────
+commonLabels:
+  app.kubernetes.io/part-of: forge
+  app.kubernetes.io/managed-by: kustomize
+
+# ─────────────────────────────────────────────
+# Common annotations
+# ─────────────────────────────────────────────
+commonAnnotations:
+  forge.dev/managed-by: kustomize
+  forge.dev/repository: https://github.com/forge-dev/forge
+
+# ─────────────────────────────────────────────
+# Image references (override in overlays)
+# ─────────────────────────────────────────────
+images:
+  - name: forge-api
+    newName: ghcr.io/forge-dev/forge/api
+    newTag: latest
+  - name: forge-worker
+    newName: ghcr.io/forge-dev/forge/worker
+    newTag: latest
+
+# ─────────────────────────────────────────────
+# ConfigMap generators
+# ─────────────────────────────────────────────
+configMapGenerator:
+  - name: forge-app-version
+    literals:
+      - VERSION=0.1.0
+      - BUILD_DATE=unknown
+      - GIT_COMMIT=unknown
+
+# ─────────────────────────────────────────────
+# Generators behavior
+# ─────────────────────────────────────────────
+generatorOptions:
+  disableNameSuffixHash: false
+  labels:
+    app.kubernetes.io/part-of: forge

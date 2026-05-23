@@ -1,0 +1,345 @@
+version: "3.9"
+
+x-common-env: &common-env
+  env_file:
+    - .env
+
+x-forge-build-args: &forge-build-args
+  BUILD_DATE: ${BUILD_DATE:-unknown}
+  GIT_COMMIT: ${GIT_COMMIT:-unknown}
+
+services:
+  # ─────────────────────────────────────────────
+  # PostgreSQL 16 with pgvector
+  # ─────────────────────────────────────────────
+  forge-db:
+    image: ankane/pgvector:v0.7.0
+    container_name: forge-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forge}
+      POSTGRES_DB: ${POSTGRES_DB:-forge}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - forge-postgres-data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - forge-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forge} -d ${POSTGRES_DB:-forge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ─────────────────────────────────────────────
+  # Redis 7
+  # ─────────────────────────────────────────────
+  forge-redis:
+    image: redis:7-alpine
+    container_name: forge-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --tcp-backlog 511
+      --timeout 0
+      --tcp-keepalive 300
+    volumes:
+      - forge-redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - forge-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ─────────────────────────────────────────────
+  # Neo4j 5.26
+  # ─────────────────────────────────────────────
+  forge-neo4j:
+    image: neo4j:5.26-community
+    container_name: forge-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-forge-neo4j-password}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_apoc_export_file_enabled: "true"
+      NEO4J_apoc_import_file_enabled: "true"
+      NEO4J_apoc_import_file_use__neo4j__config: "true"
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*,algo.*"
+      NEO4J_dbms_security_procedures_allowlist: "apoc.*"
+      NEO4J_server_memory_heap_initial__size: "512m"
+      NEO4J_server_memory_heap_max__size: "1G"
+      NEO4J_server_memory_pagecache__size: "512m"
+      NEO4JLABS_PLUGINS: '["apoc"]'
+    volumes:
+      - forge-neo4j-data:/data
+      - forge-neo4j-logs:/logs
+      - forge-neo4j-import:/var/lib/neo4j/import
+      - forge-neo4j-plugins:/plugins
+    ports:
+      - "7474:7474"   # HTTP browser
+      - "7687:7687"   # Bolt
+    networks:
+      - forge-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ─────────────────────────────────────────────
+  # Temporal Server
+  # ─────────────────────────────────────────────
+  forge-temporal:
+    image: temporalio/auto-setup:1.24
+    container_name: forge-temporal
+    restart: unless-stopped
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-forge}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-forge}
+      - POSTGRES_SEEDS=forge-db
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - ENABLE_ES=false
+      - TEMPORAL_ADDRESS=forge-temporal:7233
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-forge-default}
+    volumes:
+      - ./infra/docker/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+    ports:
+      - "7233:7233"
+    networks:
+      - forge-network
+    depends_on:
+      forge-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "forge-temporal:7233", "cluster", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  # ─────────────────────────────────────────────
+  # Temporal UI
+  # ─────────────────────────────────────────────
+  forge-temporal-ui:
+    image: temporalio/ui:2.31
+    container_name: forge-temporal-ui
+    restart: unless-stopped
+    environment:
+      - TEMPORAL_ADDRESS=forge-temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000,http://localhost:8088
+      - TEMPORAL_PERMIT_WRITE_API=true
+    ports:
+      - "8088:8080"
+    networks:
+      - forge-network
+    depends_on:
+      forge-temporal:
+        condition: service_healthy
+
+  # ─────────────────────────────────────────────
+  # FORGE API (FastAPI)
+  # ─────────────────────────────────────────────
+  forge-api:
+    build:
+      context: .
+      dockerfile: ./infra/docker/Dockerfile.api
+      args:
+        <<: *forge-build-args
+    container_name: forge-api
+    restart: unless-stopped
+    <<: *common-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forge}:${POSTGRES_PASSWORD:-forge}@forge-db:5432/${POSTGRES_DB:-forge}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-forge}:${POSTGRES_PASSWORD:-forge}@forge-db:5432/${POSTGRES_DB:-forge}
+      REDIS_URL: redis://forge-redis:6379/0
+      CELERY_BROKER_URL: redis://forge-redis:6379/1
+      CELERY_RESULT_BACKEND: redis://forge-redis:6379/2
+      NEO4J_URL: bolt://forge-neo4j:7687
+      TEMPORAL_HOST: forge-temporal:7233
+    ports:
+      - "8000:8000"
+    networks:
+      - forge-network
+    depends_on:
+      forge-db:
+        condition: service_healthy
+      forge-redis:
+        condition: service_healthy
+      forge-neo4j:
+        condition: service_healthy
+      forge-temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  # ─────────────────────────────────────────────
+  # FORGE Worker (Celery)
+  # ─────────────────────────────────────────────
+  forge-worker:
+    build:
+      context: .
+      dockerfile: ./infra/docker/Dockerfile.worker
+      args:
+        <<: *forge-build-args
+    container_name: forge-worker
+    restart: unless-stopped
+    <<: *common-env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forge}:${POSTGRES_PASSWORD:-forge}@forge-db:5432/${POSTGRES_DB:-forge}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-forge}:${POSTGRES_PASSWORD:-forge}@forge-db:5432/${POSTGRES_DB:-forge}
+      REDIS_URL: redis://forge-redis:6379/0
+      CELERY_BROKER_URL: redis://forge-redis:6379/1
+      CELERY_RESULT_BACKEND: redis://forge-redis:6379/2
+      NEO4J_URL: bolt://forge-neo4j:7687
+      TEMPORAL_HOST: forge-temporal:7233
+    networks:
+      - forge-network
+    depends_on:
+      forge-db:
+        condition: service_healthy
+      forge-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A system.runtime.workers.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+  # ─────────────────────────────────────────────
+  # FORGE Beat (Celery scheduler)
+  # ─────────────────────────────────────────────
+  forge-beat:
+    build:
+      context: .
+      dockerfile: ./infra/docker/Dockerfile.worker
+      args:
+        <<: *forge-build-args
+    container_name: forge-beat
+    restart: unless-stopped
+    <<: *common-env
+    command: >
+      celery -A system.runtime.workers.celery_app beat
+      --loglevel=info
+      --scheduler celery.schedulers:DatabaseScheduler
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-forge}:${POSTGRES_PASSWORD:-forge}@forge-db:5432/${POSTGRES_DB:-forge}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-forge}:${POSTGRES_PASSWORD:-forge}@forge-db:5432/${POSTGRES_DB:-forge}
+      REDIS_URL: redis://forge-redis:6379/0
+      CELERY_BROKER_URL: redis://forge-redis:6379/1
+      CELERY_RESULT_BACKEND: redis://forge-redis:6379/2
+    networks:
+      - forge-network
+    depends_on:
+      forge-db:
+        condition: service_healthy
+      forge-redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ─────────────────────────────────────────────
+  # FORGE Frontend (Next.js)
+  # ─────────────────────────────────────────────
+  forge-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
+    container_name: forge-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "3000:3000"
+    networks:
+      - forge-network
+    depends_on:
+      forge-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  forge-network:
+    driver: bridge
+    name: forge-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  forge-postgres-data:
+    name: forge-postgres-data
+    driver: local
+  forge-redis-data:
+    name: forge-redis-data
+    driver: local
+  forge-neo4j-data:
+    name: forge-neo4j-data
+    driver: local
+  forge-neo4j-logs:
+    name: forge-neo4j-logs
+    driver: local
+  forge-neo4j-import:
+    name: forge-neo4j-import
+    driver: local
+  forge-neo4j-plugins:
+    name: forge-neo4j-plugins
+    driver: local

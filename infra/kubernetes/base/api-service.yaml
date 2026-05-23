@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-api
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: forge
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    # Prometheus scraping
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+    # Service description
+    description: "FORGE API ClusterIP service"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: forge-api
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: http
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: metrics
+  sessionAffinity: None
+---
+# Internal DNS: forge-api.forge-system.svc.cluster.local:8000
+# Headless service for direct pod access (e.g., Temporal workers)
+apiVersion: v1
+kind: Service
+metadata:
+  name: forge-api-headless
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: forge
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    description: "Headless service for direct pod-to-pod communication"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: forge-api
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: http
+---
+# Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: forge-api-ingress
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge-api
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: forge
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.forge.dev"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Requested-With"
+    # TLS
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.forge.dev
+      secretName: forge-api-tls
+  rules:
+    - host: api.forge.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: forge-api
+                port:
+                  name: http
+---
+# NetworkPolicy: restrict traffic to/from forge-api
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: forge-api-network-policy
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge-api
+    app.kubernetes.io/part-of: forge
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: forge-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow traffic from within forge-system namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: forge-system
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 9090
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow all egress within forge-system (db, redis, neo4j, temporal)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: forge-system
+    # Allow HTTPS to external APIs (Anthropic, OpenAI, GitHub)
+    - ports:
+        - protocol: TCP
+          port: 443
+    # Allow HTTP (for redirects)
+    - ports:
+        - protocol: TCP
+          port: 80

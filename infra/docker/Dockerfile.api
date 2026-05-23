@@ -1,0 +1,166 @@
+# ═══════════════════════════════════════════════════════════════
+# FORGE API - Multi-stage Dockerfile
+# Stage 1: Builder  - installs dependencies
+# Stage 2: Runtime  - minimal production image
+# ═══════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────
+# Stage 1: Builder
+# ─────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+# Build arguments
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+
+# Set build environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PYTHONFAULTHANDLER=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    curl \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install wheel
+RUN pip install --upgrade pip setuptools wheel
+
+# Copy dependency files first (for layer caching)
+COPY pyproject.toml ./
+
+# Install all production dependencies
+# We use --no-deps initially then install full package to leverage caching
+RUN pip install \
+    "fastapi[all]>=0.115" \
+    "sqlalchemy[asyncio]>=2.0" \
+    "alembic>=1.13" \
+    "asyncpg>=0.30" \
+    "redis>=5.0" \
+    "celery[redis]>=5.4" \
+    "langgraph>=0.2" \
+    "anthropic>=0.39" \
+    "openai>=1.54" \
+    "pydantic>=2.9" \
+    "pydantic-settings>=2.6" \
+    "pgvector>=0.3" \
+    "neo4j>=5.26" \
+    "tree-sitter>=0.23" \
+    "tiktoken>=0.8" \
+    "tenacity>=9.0" \
+    "httpx>=0.27" \
+    "structlog>=24.4" \
+    "opentelemetry-sdk>=1.28" \
+    "opentelemetry-api>=1.28" \
+    "opentelemetry-exporter-otlp>=1.28" \
+    "opentelemetry-instrumentation-fastapi>=0.49b0" \
+    "opentelemetry-instrumentation-sqlalchemy>=0.49b0" \
+    "opentelemetry-instrumentation-redis>=0.49b0" \
+    "prometheus-client>=0.21" \
+    "python-jose[cryptography]>=3.3" \
+    "passlib[bcrypt]>=1.7" \
+    "python-multipart>=0.0.12" \
+    "temporalio>=1.7"
+
+# Copy application code
+COPY system/ ./system/
+COPY alembic/ ./alembic/ 2>/dev/null || true
+COPY alembic.ini ./alembic.ini 2>/dev/null || true
+
+# Install the application package
+RUN pip install -e . --no-deps
+
+# ─────────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+# Build metadata labels
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+
+LABEL org.opencontainers.image.title="FORGE API" \
+      org.opencontainers.image.description="Autonomous Software Production System - FastAPI Service" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.licenses="MIT"
+
+# Set runtime environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PYTHONHASHSEED=random \
+    PATH="/opt/venv/bin:$PATH" \
+    # Application settings
+    API_HOST=0.0.0.0 \
+    API_PORT=8000 \
+    API_WORKERS=4 \
+    # OpenTelemetry
+    OTEL_SERVICE_NAME=forge-api \
+    OTEL_PYTHON_LOG_CORRELATION=true
+
+# Install runtime system dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libssl3 \
+    curl \
+    tini \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd --gid 1001 forge && \
+    useradd --uid 1001 --gid forge --shell /bin/bash --create-home forge
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY --chown=forge:forge system/ /app/system/
+COPY --chown=forge:forge alembic/ /app/alembic/ 2>/dev/null || true
+COPY --chown=forge:forge alembic.ini /app/alembic.ini 2>/dev/null || true
+COPY --chown=forge:forge pyproject.toml /app/pyproject.toml
+
+# Set working directory
+WORKDIR /app
+
+# Switch to non-root user
+USER forge
+
+# Expose API port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Use tini as init process for proper signal handling
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Default command: run uvicorn with 4 workers
+CMD ["uvicorn", "system.api.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "4", \
+     "--loop", "uvloop", \
+     "--http", "httptools", \
+     "--access-log", \
+     "--log-level", "info", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*"]

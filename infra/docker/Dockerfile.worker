@@ -1,0 +1,174 @@
+# ═══════════════════════════════════════════════════════════════
+# FORGE Worker - Multi-stage Dockerfile
+# Stage 1: Builder  - installs dependencies
+# Stage 2: Runtime  - minimal production image for Celery
+# ═══════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────
+# Stage 1: Builder
+# ─────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+# Build arguments
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+
+# Set build environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PYTHONFAULTHANDLER=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    curl \
+    git \
+    # Additional tools for agent tasks (code execution, git operations)
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install wheel
+RUN pip install --upgrade pip setuptools wheel
+
+# Copy dependency definition
+COPY pyproject.toml ./
+
+# Install all production dependencies
+RUN pip install \
+    "fastapi[all]>=0.115" \
+    "sqlalchemy[asyncio]>=2.0" \
+    "alembic>=1.13" \
+    "asyncpg>=0.30" \
+    "redis>=5.0" \
+    "celery[redis]>=5.4" \
+    "langgraph>=0.2" \
+    "anthropic>=0.39" \
+    "openai>=1.54" \
+    "pydantic>=2.9" \
+    "pydantic-settings>=2.6" \
+    "pgvector>=0.3" \
+    "neo4j>=5.26" \
+    "tree-sitter>=0.23" \
+    "tiktoken>=0.8" \
+    "tenacity>=9.0" \
+    "httpx>=0.27" \
+    "structlog>=24.4" \
+    "opentelemetry-sdk>=1.28" \
+    "opentelemetry-api>=1.28" \
+    "opentelemetry-exporter-otlp>=1.28" \
+    "prometheus-client>=0.21" \
+    "python-jose[cryptography]>=3.3" \
+    "passlib[bcrypt]>=1.7" \
+    "python-multipart>=0.0.12" \
+    "temporalio>=1.7"
+
+# Copy application code
+COPY system/ ./system/
+COPY alembic/ ./alembic/ 2>/dev/null || true
+COPY alembic.ini ./alembic.ini 2>/dev/null || true
+
+# Install the application package
+RUN pip install -e . --no-deps
+
+# ─────────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+# Build metadata labels
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+
+LABEL org.opencontainers.image.title="FORGE Worker" \
+      org.opencontainers.image.description="Autonomous Software Production System - Celery Worker" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.licenses="MIT"
+
+# Set runtime environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PYTHONHASHSEED=random \
+    PATH="/opt/venv/bin:$PATH" \
+    # Celery settings
+    CELERY_WORKER_CONCURRENCY=4 \
+    CELERY_WORKER_LOGLEVEL=info \
+    CELERY_WORKER_MAX_TASKS_PER_CHILD=1000 \
+    # OpenTelemetry
+    OTEL_SERVICE_NAME=forge-worker \
+    OTEL_PYTHON_LOG_CORRELATION=true \
+    # Prevent Celery from fork issues with async
+    FORKED_BY_MULTIPROCESSING=1
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libssl3 \
+    curl \
+    tini \
+    # Git is needed for agent tasks that interact with repositories
+    git \
+    # Procps for process management
+    procps \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd --gid 1001 forge && \
+    useradd --uid 1001 --gid forge --shell /bin/bash --create-home forge
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY --chown=forge:forge system/ /app/system/
+COPY --chown=forge:forge alembic/ /app/alembic/ 2>/dev/null || true
+COPY --chown=forge:forge alembic.ini /app/alembic.ini 2>/dev/null || true
+COPY --chown=forge:forge pyproject.toml /app/pyproject.toml
+
+# Create directories for Celery
+RUN mkdir -p /app/logs /app/tmp && \
+    chown -R forge:forge /app/logs /app/tmp
+
+# Set working directory
+WORKDIR /app
+
+# Switch to non-root user
+USER forge
+
+# Health check via celery inspect
+HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
+    CMD celery -A system.runtime.workers.celery_app inspect ping \
+        -d "celery@${HOSTNAME}" \
+        --timeout 10 \
+        || exit 1
+
+# Use tini for proper signal handling (important for Celery graceful shutdown)
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Default command: start Celery worker
+CMD ["celery", \
+     "-A", "system.runtime.workers.celery_app", \
+     "worker", \
+     "--loglevel=info", \
+     "--concurrency=4", \
+     "--max-tasks-per-child=1000", \
+     "--without-gossip", \
+     "--without-mingle", \
+     "--without-heartbeat", \
+     "-O", "fair"]

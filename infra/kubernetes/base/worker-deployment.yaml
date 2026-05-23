@@ -1,0 +1,302 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forge-worker
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: forge
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    description: "FORGE Celery worker service"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: forge-worker
+      app.kubernetes.io/component: worker
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: forge-worker
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: forge
+        app.kubernetes.io/version: "0.1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        checksum/config: "placeholder-updated-by-kustomize"
+
+    spec:
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+
+      serviceAccountName: forge-worker
+
+      # Longer grace period for worker - allow in-flight tasks to complete
+      terminationGracePeriodSeconds: 120
+
+      imagePullSecrets:
+        - name: forge-registry-credentials
+
+      containers:
+        - name: forge-worker
+          image: forge-worker:latest
+          imagePullPolicy: Always
+
+          command:
+            - celery
+            - -A
+            - system.runtime.workers.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=4
+            - --max-tasks-per-child=1000
+            - --without-gossip
+            - --without-mingle
+            - -O
+            - fair
+
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: forge-config
+            - secretRef:
+                name: forge-secrets
+
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Override concurrency from env
+            - name: CELERY_WORKER_CONCURRENCY
+              value: "4"
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+
+          # Liveness probe: check Celery worker is responding
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - system.runtime.workers.celery_app
+                - inspect
+                - ping
+                - -d
+                - "celery@$(POD_NAME)"
+                - --timeout
+                - "10"
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 15
+            successThreshold: 1
+            failureThreshold: 3
+
+          # Readiness probe
+          readinessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - system.runtime.workers.celery_app
+                - inspect
+                - ping
+                - -d
+                - "celery@$(POD_NAME)"
+                - --timeout
+                - "5"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: app-tmp
+              mountPath: /app/tmp
+            - name: app-logs
+              mountPath: /app/logs
+
+          lifecycle:
+            preStop:
+              exec:
+                # Warm shutdown: finish current task before stopping
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    celery -A system.runtime.workers.celery_app control shutdown \
+                      -d "celery@${HOSTNAME}" || true
+                    sleep 10
+
+        # Sidecar: Celery Flower monitoring (optional, can be disabled)
+        - name: celery-exporter
+          image: danihodovic/celery-exporter:0.10.0
+          ports:
+            - name: exporter
+              containerPort: 9808
+              protocol: TCP
+          env:
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: forge-secrets
+                  key: CELERY_BROKER_URL
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: "200Mi"
+        - name: app-tmp
+          emptyDir:
+            sizeLimit: "5Gi"
+        - name: app-logs
+          emptyDir:
+            sizeLimit: "500Mi"
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - forge-worker
+                topologyKey: kubernetes.io/hostname
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: forge-worker
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forge-worker
+  namespace: forge-system
+  labels:
+    app.kubernetes.io/name: forge-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: forge
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: forge-worker-pdb
+  namespace: forge-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: forge-worker
+      app.kubernetes.io/component: worker
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: forge-worker-hpa
+  namespace: forge-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: forge-worker
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 180

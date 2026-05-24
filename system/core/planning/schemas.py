@@ -7,6 +7,7 @@ work into agent-executable tasks.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict, List, Optional
 
 from pydantic import Field, field_validator
@@ -182,3 +183,163 @@ class ArchitecturePlan(TimestampedModel):
     def infra_services(self) -> List[ServiceDefinition]:
         """Return only gateway/infrastructure service definitions."""
         return [s for s in self.services if s.service_type in {"gateway", "database", "cache"}]
+
+
+# ========================================================================== #
+# Repo Topology
+# ========================================================================== #
+
+
+class RepoTopology(BaseForgeModel):
+    """Repository organisation strategy and service layout."""
+
+    topology_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique topology identifier.",
+    )
+    project_id: str = Field(..., description="FORGE project this topology belongs to.")
+    repo_type: str = Field(
+        default="monorepo",
+        description="'monorepo' | 'polyrepo' — organisation of source repositories.",
+    )
+    services: List[ServiceDefinition] = Field(
+        default_factory=list,
+        description="All deployable services in this topology.",
+    )
+    monorepo_root: Optional[str] = Field(
+        default=".",
+        description="Root path of the monorepo (if repo_type == 'monorepo').",
+    )
+    directory_structure: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Nested dict representing the repo file tree.",
+    )
+
+    @field_validator("repo_type")
+    @classmethod
+    def validate_repo_type(cls, v: str) -> str:
+        if v not in {"monorepo", "polyrepo"}:
+            return "monorepo"
+        return v
+
+
+# ========================================================================== #
+# Infrastructure Plan
+# ========================================================================== #
+
+
+class InfrastructurePlan(BaseForgeModel):
+    """Cloud infrastructure plan derived from the stack and deployment target."""
+
+    cloud_provider: str = Field(
+        default="aws",
+        description="Target cloud provider: 'aws' | 'gcp' | 'azure' | 'self-hosted'.",
+    )
+    cloud_services: List[str] = Field(
+        default_factory=list,
+        description="Required managed cloud services, e.g. ['RDS', 'ElastiCache', 'EKS'].",
+    )
+    estimated_monthly_cost_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Estimated monthly infrastructure cost in USD.",
+    )
+    cost_breakdown: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-service cost breakdown: {'RDS': 150.0, 'EKS': 300.0, ...}.",
+    )
+    regions: List[str] = Field(
+        default_factory=list,
+        description="Deployment regions, e.g. ['us-east-1', 'eu-west-1'].",
+    )
+    high_availability: bool = Field(
+        default=False,
+        description="Whether multi-AZ / multi-region HA is configured.",
+    )
+    disaster_recovery: str = Field(
+        default="none",
+        description="DR strategy: 'none' | 'warm-standby' | 'hot-standby' | 'multi-region'.",
+    )
+    notes: List[str] = Field(
+        default_factory=list,
+        description="Additional infrastructure notes and recommendations.",
+    )
+
+
+# ========================================================================== #
+# Scalability Profile
+# ========================================================================== #
+
+
+class ScalabilityProfile(BaseForgeModel):
+    """Scalability assessment for the proposed architecture."""
+
+    expected_users: str = Field(
+        default="",
+        description="Expected concurrent / total user count from spec requirements.",
+    )
+    requests_per_second: int = Field(
+        default=0,
+        ge=0,
+        description="Estimated peak requests per second.",
+    )
+    data_volume_gb: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Estimated data volume in GB.",
+    )
+    bottlenecks: List[str] = Field(
+        default_factory=list,
+        description="Identified scaling bottlenecks.",
+    )
+    recommendations: List[str] = Field(
+        default_factory=list,
+        description="Specific recommendations to address bottlenecks.",
+    )
+    horizontal_scaling: bool = Field(
+        default=True,
+        description="Whether services are designed for horizontal scaling.",
+    )
+    caching_strategy: str = Field(
+        default="none",
+        description="Primary caching approach: 'none' | 'redis' | 'cdn' | 'multi-layer'.",
+    )
+    database_scaling: str = Field(
+        default="vertical",
+        description="Database scaling strategy: 'vertical' | 'read-replicas' | 'sharding' | 'cqrs'.",
+    )
+
+
+# ========================================================================== #
+# Security Profile
+# ========================================================================== #
+
+
+class SecurityProfile(BaseForgeModel):
+    """Detailed security posture for the project."""
+
+    auth_method: str = Field(
+        default="JWT",
+        description="Authentication method: 'JWT' | 'OAuth2' | 'API_KEY' | 'mTLS' | 'session'.",
+    )
+    https_enforced: bool = Field(default=True, description="HTTPS enforced on all endpoints.")
+    rate_limiting: bool = Field(default=True, description="API rate limiting enabled.")
+    input_validation: bool = Field(default=True, description="Server-side input validation.")
+    sql_injection_protection: bool = Field(default=True)
+    xss_protection: bool = Field(default=True)
+    csrf_protection: bool = Field(default=True)
+    cors_configured: bool = Field(default=True)
+    secrets_in_env: bool = Field(
+        default=True,
+        description="Secrets managed via environment variables / secrets manager.",
+    )
+    compliance: List[str] = Field(
+        default_factory=list,
+        description="Required compliance standards: ['GDPR', 'SOC2', 'HIPAA', ...].",
+    )
+    additional_controls: List[str] = Field(
+        default_factory=list,
+        description="Additional security controls: WAF, DDoS protection, audit logging, etc.",
+    )
+    vulnerability_scanning: bool = Field(default=False)
+    penetration_testing: bool = Field(default=False)

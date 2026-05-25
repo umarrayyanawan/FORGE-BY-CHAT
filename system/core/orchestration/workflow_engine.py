@@ -83,14 +83,14 @@ class WorkflowEngine:
 
     def __init__(
         self,
-        task_graph_engine: TaskGraphEngine,
-        state_manager: StateManager,
-        event_bus: Any,  # EventBus — typed Any to avoid circular import
-        retry_manager: RetryManager,
-        celery_app: Any,  # Celery — typed Any to keep import optional
+        task_graph_engine: Optional[TaskGraphEngine] = None,
+        state_manager: Optional[StateManager] = None,
+        event_bus: Any = None,
+        retry_manager: Optional[RetryManager] = None,
+        celery_app: Any = None,
     ) -> None:
-        self._tge = task_graph_engine
-        self._state = state_manager
+        self._tge = task_graph_engine or TaskGraphEngine()
+        self._state = state_manager or StateManager(redis=None)
         self._bus = event_bus
         self._retry = retry_manager
         self._celery = celery_app
@@ -100,16 +100,23 @@ class WorkflowEngine:
     # Workflow lifecycle
     # ------------------------------------------------------------------
 
-    async def start_workflow(self, project_id: str, graph: TaskGraph) -> None:
+    async def start_workflow(self, project_id: str, graph: Optional[TaskGraph] = None) -> str:
         """Initialise execution state and dispatch the first wave of ready tasks.
 
         Args:
             project_id: FORGE project identifier.
             graph:       Fully-built TaskGraph for the execution phase.
         """
+        import uuid as _uuid
+        workflow_id = str(_uuid.uuid4())
+
+        if graph is None:
+            graph = TaskGraph(project_id=project_id)
+
         logger.info(
             "Starting workflow",
             project_id=project_id,
+            workflow_id=workflow_id,
             graph_id=graph.graph_id,
             total_tasks=len(graph.tasks),
         )
@@ -128,7 +135,7 @@ class WorkflowEngine:
                 "No ready tasks at workflow start — graph may have unresolvable dependencies",
                 project_id=project_id,
             )
-            return
+            return workflow_id
 
         # Step 4: Dispatch all ready tasks
         dispatch_results = await asyncio.gather(
@@ -151,6 +158,7 @@ class WorkflowEngine:
                     task_id=task.task_id,
                     celery_id=result,
                 )
+        return workflow_id
 
     async def pause_workflow(self, project_id: str) -> None:
         """Pause dispatching for *project_id*.

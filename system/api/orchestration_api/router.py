@@ -27,11 +27,12 @@ async def start_pipeline(project_id: str, description: str) -> Dict[str, Any]:
 async def get_pipeline_status(project_id: str) -> Dict[str, Any]:
     """Get current pipeline status and phase progress."""
     from system.core.orchestration.state_manager import StateManager
-    manager = StateManager()
-    state = await manager.get_project_state(project_id)
-    if not state:
+    manager = StateManager(redis=None)
+    try:
+        state = await manager.get_state(project_id)
+        return {"project_id": project_id, "state": state.to_redis_dict()}
+    except Exception:
         raise HTTPException(status_code=404, detail="Pipeline not found")
-    return {"project_id": project_id, "state": state}
 
 
 @router.post("/{project_id}/pause")

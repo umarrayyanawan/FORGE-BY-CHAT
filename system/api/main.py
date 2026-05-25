@@ -42,6 +42,7 @@ from system.core.memory.router import router as memory_router
 from system.core.evolution.router import router as evolution_router
 from system.api.auth.router import router as auth_router
 from system.api.orchestration_api.router import router as pipeline_router
+from system.core.monitoring.router import router as monitoring_router
 
 logger = get_logger(__name__)
 
@@ -301,6 +302,7 @@ def create_app() -> FastAPI:
     application.include_router(memory_router, prefix=prefix)
     application.include_router(evolution_router, prefix=prefix)
     application.include_router(pipeline_router, prefix=prefix)
+    application.include_router(monitoring_router, prefix=prefix)
 
     return application
 

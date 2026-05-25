@@ -6,7 +6,49 @@ import json
 from typing import Any
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic.fields import FieldInfo
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    SettingsConfigDict,
+)
+from pydantic_settings.main import PydanticBaseSettingsSource
+
+
+class _SafeEnvSource(EnvSettingsSource):
+    """Env source that treats empty-string values as absent for complex fields.
+
+    Pydantic-settings 2.14+ calls json.loads() on every string value before
+    field validators run.  An empty or comma-separated CORS_ORIGINS= in .env
+    would raise JSONDecodeError.  This subclass short-circuits that.
+    """
+
+    def prepare_field_value(
+        self, field_name: str, field: FieldInfo, value: Any, value_is_complex: bool
+    ) -> Any:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None  # Let the field default take effect
+            if not (stripped.startswith("[") or stripped.startswith("{")):
+                return value  # Not JSON — pass through for field_validator
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
+class _SafeDotEnvSource(DotEnvSettingsSource):
+    """DotEnv variant of _SafeEnvSource."""
+
+    def prepare_field_value(
+        self, field_name: str, field: FieldInfo, value: Any, value_is_complex: bool
+    ) -> Any:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            if not (stripped.startswith("[") or stripped.startswith("{")):
+                return value
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
 
 
 class Settings(BaseSettings):
@@ -118,6 +160,25 @@ class Settings(BaseSettings):
     max_agent_tokens: int = 8192
     max_retries: int = 3
     retry_delay_seconds: float = 2.0
+
+    # ------------------------------------------------------------------ #
+    # Source customisation
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            _SafeEnvSource(settings_cls),
+            _SafeDotEnvSource(settings_cls),
+            file_secret_settings,
+        )
 
     # ------------------------------------------------------------------ #
     # Derived helpers

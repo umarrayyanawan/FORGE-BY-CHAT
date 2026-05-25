@@ -137,8 +137,8 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY --chown=forge:forge system/ /app/system/
-COPY --chown=forge:forge alembic/ /app/alembic/ 2>/dev/null || true
-COPY --chown=forge:forge alembic.ini /app/alembic.ini 2>/dev/null || true
+COPY --chown=forge:forge alembic/ /app/alembic/
+COPY --chown=forge:forge alembic.ini /app/alembic.ini
 COPY --chown=forge:forge pyproject.toml /app/pyproject.toml
 
 # Create directories for Celery

@@ -79,8 +79,8 @@ RUN pip install \
 
 # Copy application code
 COPY system/ ./system/
-COPY alembic/ ./alembic/ 2>/dev/null || true
-COPY alembic.ini ./alembic.ini 2>/dev/null || true
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
 
 # Install the application package
 RUN pip install -e . --no-deps

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List
+import json
+from typing import Any, List
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,19 +30,38 @@ class Settings(BaseSettings):
     app_name: str = "FORGE"
     version: str = "0.1.0"
     debug: bool = False
-    secret_key: str = Field(..., min_length=32, description="HMAC / JWT signing key")
+    secret_key: str = Field(
+        default="dev-secret-key-change-in-production-min32chars",
+        min_length=32,
+        description="HMAC / JWT signing key",
+    )
     cors_origins: List[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors(cls, v: Any) -> Any:
+        """Accept JSON array, comma-separated string, or plain URL."""
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return ["http://localhost:3000"]
+            if v.startswith("["):
+                return json.loads(v)
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # ------------------------------------------------------------------ #
     # PostgreSQL / SQLAlchemy
     # ------------------------------------------------------------------ #
     database_url: str = Field(
-        ...,
+        default="postgresql+asyncpg://forge:forge@localhost:5432/forge_db",
         description="Async SQLAlchemy URL, e.g. postgresql+asyncpg://user:pass@host/db",
     )
     database_sync_url: str = Field(
-        ...,
+        default="postgresql+psycopg2://forge:forge@localhost:5432/forge_db",
         description="Sync SQLAlchemy URL used by Alembic, e.g. postgresql+psycopg2://...",
     )
 
@@ -57,7 +77,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     neo4j_url: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = Field(..., description="Neo4j password")
+    neo4j_password: str = Field(default="forge", description="Neo4j password")
 
     # ------------------------------------------------------------------ #
     # Temporal
@@ -68,7 +88,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # AI / LLM
     # ------------------------------------------------------------------ #
-    anthropic_api_key: str = Field(..., description="Anthropic API key")
+    anthropic_api_key: str = Field(default="", description="Anthropic API key")
     openai_api_key: str = ""
 
     # ------------------------------------------------------------------ #

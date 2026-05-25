@@ -8,10 +8,9 @@ SQLAlchemy engine state.
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+import subprocess
 
 from system.observability.logging.logger import get_logger
 
@@ -29,8 +28,8 @@ class MigrationResult:
 
     success: bool
     current_revision: str
-    migrations_applied: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    migrations_applied: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     stdout: str = ""
     stderr: str = ""
 
@@ -72,7 +71,7 @@ class MigrationTool:
     # Internal helpers
     # ------------------------------------------------------------------ #
 
-    def _build_env(self) -> Optional[dict]:
+    def _build_env(self) -> dict | None:
         """Build an environment dict for the Alembic subprocess."""
         if not self.database_url:
             return None
@@ -105,7 +104,7 @@ class MigrationTool:
                 cwd=self.project_dir,
                 env=env,
             )
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             # Return a synthetic failed result so callers get a consistent type.
             result = subprocess.CompletedProcess(
                 args=cmd,
@@ -114,7 +113,7 @@ class MigrationTool:
                 stderr=f"Alembic command timed out after {timeout}s: {' '.join(cmd)}",
             )
             return result
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             result = subprocess.CompletedProcess(
                 args=cmd,
                 returncode=-1,
@@ -143,7 +142,7 @@ class MigrationTool:
         current = self.get_current_revision()
 
         # Parse applied revision IDs from Alembic's output
-        applied: List[str] = []
+        applied: list[str] = []
         for line in result.stdout.splitlines():
             if "Running upgrade" in line or "Upgraded to" in line:
                 parts = line.split()
@@ -151,7 +150,7 @@ class MigrationTool:
                     if len(part) == 12 and all(c in "0123456789abcdef" for c in part):
                         applied.append(part)
 
-        errors: List[str] = []
+        errors: list[str] = []
         if not success and result.stderr.strip():
             errors = [result.stderr.strip()]
         if not success and result.stdout.strip() and not errors:
@@ -222,7 +221,9 @@ class MigrationTool:
                     return file_path
 
         # Fallback: return a marker string
-        logger.warning("Could not parse migration file path from output", output=result.stdout[:200])
+        logger.warning(
+            "Could not parse migration file path from output", output=result.stdout[:200]
+        )
         return f"<migration: {message}>"
 
     def get_current_revision(self) -> str:
@@ -248,7 +249,7 @@ class MigrationTool:
 
         return "base"
 
-    def get_history(self, verbose: bool = False) -> List[str]:
+    def get_history(self, verbose: bool = False) -> list[str]:
         """Return the migration history as a list of revision strings.
 
         Args:
@@ -279,7 +280,7 @@ class MigrationTool:
         success = result.returncode == 0
         current = self.get_current_revision()
 
-        errors: List[str] = []
+        errors: list[str] = []
         if not success:
             errors = [result.stderr.strip() or result.stdout.strip()]
 
@@ -311,7 +312,7 @@ class MigrationTool:
         success = result.returncode == 0
         current = self.get_current_revision()
 
-        errors: List[str] = []
+        errors: list[str] = []
         if not success:
             errors = [result.stderr.strip() or result.stdout.strip()]
 

@@ -16,14 +16,13 @@ Event hierarchy:
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
+import uuid
 
 from pydantic import Field
 
 from system.shared.models import AgentType, BaseForgeModel, ExecutionPhase
-
 
 # ========================================================================== #
 # Base Event
@@ -50,19 +49,19 @@ class ForgeEvent(BaseForgeModel):
         ...,
         description="FORGE project this event belongs to.",
     )
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         default=None,
         description="task_id of the TaskNode this event relates to (if applicable).",
     )
-    agent_type: Optional[AgentType] = Field(
+    agent_type: AgentType | None = Field(
         default=None,
         description="Agent type that produced this event (if applicable).",
     )
-    phase: Optional[ExecutionPhase] = Field(
+    phase: ExecutionPhase | None = Field(
         default=None,
         description="Execution phase at the time of the event.",
     )
-    payload: Dict[str, Any] = Field(
+    payload: dict[str, Any] = Field(
         default_factory=dict,
         description="Arbitrary structured data for this event type.",
     )
@@ -86,15 +85,15 @@ class TaskCompletedEvent(ForgeEvent):
     """Emitted when a TaskNode transitions to COMPLETED status."""
 
     event_type: str = Field(default="task_completed", frozen=True)
-    output_artifacts: List[str] = Field(
+    output_artifacts: list[str] = Field(
         default_factory=list,
         description="File paths produced by the completing agent.",
     )
-    duration_seconds: Optional[float] = Field(
+    duration_seconds: float | None = Field(
         default=None,
         description="Wall-clock seconds from task start to completion.",
     )
-    tokens_used: Optional[int] = Field(
+    tokens_used: int | None = Field(
         default=None,
         description="Actual LLM tokens consumed by the agent.",
     )
@@ -124,11 +123,11 @@ class TaskStartedEvent(ForgeEvent):
     """Emitted when a TaskNode transitions to RUNNING status."""
 
     event_type: str = Field(default="task_started", frozen=True)
-    worker_id: Optional[str] = Field(
+    worker_id: str | None = Field(
         default=None,
         description="Celery worker hostname that picked up this task.",
     )
-    queue_name: Optional[str] = Field(
+    queue_name: str | None = Field(
         default=None,
         description="Queue from which the task was consumed.",
     )
@@ -156,7 +155,7 @@ class DeploymentSucceededEvent(ForgeEvent):
 
     event_type: str = Field(default="deployment_succeeded", frozen=True)
     target: str = Field(..., description="Deployment target.")
-    service_urls: Dict[str, str] = Field(
+    service_urls: dict[str, str] = Field(
         default_factory=dict,
         description="Mapping of service name → public URL after deployment.",
     )
@@ -171,12 +170,12 @@ class TestFailedEvent(ForgeEvent):
     """Emitted when the test suite reports failures."""
 
     event_type: str = Field(default="test_failed", frozen=True)
-    failing_tests: List[str] = Field(
+    failing_tests: list[str] = Field(
         ...,
         description="List of test identifiers (e.g. pytest node IDs) that failed.",
     )
     total_failures: int = Field(default=0, ge=0)
-    coverage_pct: Optional[float] = Field(
+    coverage_pct: float | None = Field(
         default=None,
         ge=0.0,
         le=100.0,
@@ -189,7 +188,7 @@ class TestPassedEvent(ForgeEvent):
 
     event_type: str = Field(default="test_passed", frozen=True)
     total_tests: int = Field(default=0, ge=0)
-    coverage_pct: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    coverage_pct: float | None = Field(default=None, ge=0.0, le=100.0)
 
 
 # ========================================================================== #
@@ -224,13 +223,13 @@ class PhaseCompletedEvent(ForgeEvent):
 
     event_type: str = Field(default="phase_completed", frozen=True)
     phase: ExecutionPhase = Field(..., description="Phase that just completed.")
-    next_phase: Optional[ExecutionPhase] = Field(
+    next_phase: ExecutionPhase | None = Field(
         default=None,
         description="The phase the pipeline is advancing to (None if pipeline is done).",
     )
     completed_task_count: int = Field(default=0, ge=0)
     failed_task_count: int = Field(default=0, ge=0)
-    duration_minutes: Optional[float] = Field(
+    duration_minutes: float | None = Field(
         default=None,
         description="Wall-clock minutes the phase took.",
     )
@@ -240,8 +239,8 @@ class PipelineCompletedEvent(ForgeEvent):
     """Emitted when the entire FORGE pipeline finishes successfully."""
 
     event_type: str = Field(default="pipeline_completed", frozen=True)
-    total_duration_minutes: Optional[float] = None
-    deployed_urls: Dict[str, str] = Field(default_factory=dict)
+    total_duration_minutes: float | None = None
+    deployed_urls: dict[str, str] = Field(default_factory=dict)
 
 
 class PipelineAbortedEvent(ForgeEvent):
@@ -259,7 +258,7 @@ class PipelineAbortedEvent(ForgeEvent):
 # Event type registry
 # ========================================================================== #
 
-EVENT_TYPE_REGISTRY: Dict[str, type] = {
+EVENT_TYPE_REGISTRY: dict[str, type] = {
     "task_completed": TaskCompletedEvent,
     "task_failed": TaskFailedEvent,
     "task_started": TaskStartedEvent,
@@ -274,7 +273,7 @@ EVENT_TYPE_REGISTRY: Dict[str, type] = {
 }
 
 
-def deserialize_event(data: Dict[str, Any]) -> ForgeEvent:
+def deserialize_event(data: dict[str, Any]) -> ForgeEvent:
     """Deserialize a raw dict into the most specific ForgeEvent subclass.
 
     Falls back to the base ForgeEvent if the event_type is not recognised.

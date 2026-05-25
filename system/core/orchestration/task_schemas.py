@@ -7,7 +7,7 @@ that drive the autonomous software-production pipeline.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field, model_validator
 
@@ -19,7 +19,6 @@ from system.shared.models import (
     TaskStatus,
     TimestampedModel,
 )
-
 
 # ========================================================================== #
 # Validation Rule
@@ -40,8 +39,7 @@ class ValidationRule(BaseForgeModel):
     rule_type: str = Field(
         ...,
         description=(
-            "Kind of check: 'file_exists' | 'tests_pass' | 'lint_clean' | "
-            "'type_check' | 'custom'."
+            "Kind of check: 'file_exists' | 'tests_pass' | 'lint_clean' | 'type_check' | 'custom'."
         ),
     )
     target: str = Field(
@@ -52,24 +50,22 @@ class ValidationRule(BaseForgeModel):
         default="error",
         description="'error' causes task failure; 'warning' is logged but non-blocking.",
     )
-    config: Dict[str, Any] = Field(
+    config: dict[str, Any] = Field(
         default_factory=dict,
         description="Rule-specific configuration (e.g. command, args, env).",
     )
 
     @model_validator(mode="after")
-    def validate_severity(self) -> "ValidationRule":
+    def validate_severity(self) -> ValidationRule:
         if self.severity not in {"error", "warning"}:
             raise ValueError(f"severity must be 'error' or 'warning', got {self.severity!r}")
         return self
 
     @model_validator(mode="after")
-    def validate_rule_type(self) -> "ValidationRule":
+    def validate_rule_type(self) -> ValidationRule:
         allowed = {"file_exists", "tests_pass", "lint_clean", "type_check", "custom"}
         if self.rule_type not in allowed:
-            raise ValueError(
-                f"rule_type must be one of {allowed}, got {self.rule_type!r}"
-            )
+            raise ValueError(f"rule_type must be one of {allowed}, got {self.rule_type!r}")
         return self
 
 
@@ -91,44 +87,50 @@ class TaskNode(TimestampedModel):
         description="Unique identifier for this task within its graph.",
     )
     name: str = Field(..., description="Human-readable task name (e.g. 'generate_user_model').")
-    description: str = Field(..., description="Detailed description of what this task must produce.")
+    description: str = Field(
+        ..., description="Detailed description of what this task must produce."
+    )
     agent_type: AgentType = Field(..., description="Specialist agent responsible for this task.")
     priority: Priority = Field(default=Priority.MEDIUM, description="Scheduling priority.")
     status: TaskStatus = Field(default=TaskStatus.PENDING, description="Current lifecycle state.")
 
     # DAG relationships
-    dependencies: List[str] = Field(
+    dependencies: list[str] = Field(
         default_factory=list,
         description="task_ids that must be COMPLETED before this task can start.",
     )
-    blocking: List[str] = Field(
+    blocking: list[str] = Field(
         default_factory=list,
         description="task_ids that cannot start until this task completes.",
     )
 
     # Validation
-    validation_rules: List[ValidationRule] = Field(
+    validation_rules: list[ValidationRule] = Field(
         default_factory=list,
         description="Automated checks run after the agent completes the task.",
     )
 
     # Agent context
-    input_context: Dict[str, Any] = Field(
+    input_context: dict[str, Any] = Field(
         default_factory=dict,
         description=(
             "Scoped context delivered to the agent: relevant spec sections, "
             "existing file contents, interface contracts, etc."
         ),
     )
-    output_artifacts: List[str] = Field(
+    output_artifacts: list[str] = Field(
         default_factory=list,
         description="Expected output file paths the agent must create or modify.",
     )
 
     # Retry / timeout
     retry_count: int = Field(default=0, ge=0, description="Number of attempts made so far.")
-    max_retries: int = Field(default=3, ge=0, description="Maximum retry attempts before permanent failure.")
-    timeout_seconds: int = Field(default=3600, gt=0, description="Wall-clock deadline for a single attempt.")
+    max_retries: int = Field(
+        default=3, ge=0, description="Maximum retry attempts before permanent failure."
+    )
+    timeout_seconds: int = Field(
+        default=3600, gt=0, description="Wall-clock deadline for a single attempt."
+    )
 
     # Resource estimate
     estimated_tokens: int = Field(
@@ -142,14 +144,16 @@ class TaskNode(TimestampedModel):
     phase: ExecutionPhase = Field(..., description="Pipeline phase this task belongs to.")
 
     # Error tracking
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         default=None,
         description="Last error encountered (populated on failure).",
     )
 
     # Timing
-    started_at: Optional[datetime] = Field(default=None, description="When execution began.")
-    completed_at: Optional[datetime] = Field(default=None, description="When execution finished (pass or fail).")
+    started_at: datetime | None = Field(default=None, description="When execution began.")
+    completed_at: datetime | None = Field(
+        default=None, description="When execution finished (pass or fail)."
+    )
 
     @property
     def is_terminal(self) -> bool:
@@ -157,7 +161,7 @@ class TaskNode(TimestampedModel):
         return self.status in {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.BLOCKED}
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Elapsed execution time, or None if not yet started / completed."""
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
@@ -184,7 +188,7 @@ class TaskGraph(TimestampedModel):
 
     graph_id: str = Field(..., description="Unique identifier for this task graph.")
     project_id: str = Field(..., description="FORGE project this graph belongs to.")
-    tasks: List[TaskNode] = Field(default_factory=list, description="All task nodes in the graph.")
+    tasks: list[TaskNode] = Field(default_factory=list, description="All task nodes in the graph.")
     phase: ExecutionPhase = Field(..., description="Pipeline phase this graph represents.")
 
     # Aggregate counters (kept in sync by the engine)
@@ -193,14 +197,14 @@ class TaskGraph(TimestampedModel):
     failed_tasks: int = Field(default=0, ge=0)
 
     # Pre-computed structural data
-    execution_order: List[List[str]] = Field(
+    execution_order: list[list[str]] = Field(
         default_factory=list,
         description=(
             "Topological levels as computed by Kahn's algorithm.  Tasks within "
             "the same level can be dispatched in parallel."
         ),
     )
-    critical_path: List[str] = Field(
+    critical_path: list[str] = Field(
         default_factory=list,
         description="Ordered task_ids forming the longest dependency chain.",
     )
@@ -210,28 +214,25 @@ class TaskGraph(TimestampedModel):
         description="Sum of per-task estimates along the critical path (minutes).",
     )
 
-    def task_by_id(self, task_id: str) -> Optional[TaskNode]:
+    def task_by_id(self, task_id: str) -> TaskNode | None:
         """Look up a task by its task_id.  Returns None when not found."""
         for task in self.tasks:
             if task.task_id == task_id:
                 return task
         return None
 
-    def tasks_by_phase(self, phase: ExecutionPhase) -> List[TaskNode]:
+    def tasks_by_phase(self, phase: ExecutionPhase) -> list[TaskNode]:
         """Return all tasks that belong to the given phase."""
         return [t for t in self.tasks if t.phase == phase]
 
-    def tasks_by_status(self, status: TaskStatus) -> List[TaskNode]:
+    def tasks_by_status(self, status: TaskStatus) -> list[TaskNode]:
         """Return all tasks in the given status."""
         return [t for t in self.tasks if t.status == status]
 
     @property
     def pending_tasks(self) -> int:
         """Number of tasks not yet started or retrying."""
-        return sum(
-            1 for t in self.tasks
-            if t.status in {TaskStatus.PENDING, TaskStatus.RETRYING}
-        )
+        return sum(1 for t in self.tasks if t.status in {TaskStatus.PENDING, TaskStatus.RETRYING})
 
     @property
     def running_tasks(self) -> int:
@@ -256,17 +257,17 @@ class TaskGraphUpdate(BaseForgeModel):
 
     task_id: str = Field(..., description="task_id of the node to update.")
     status: TaskStatus = Field(..., description="New lifecycle status.")
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         default=None,
         description="Error details (required when status is FAILED).",
     )
-    output_artifacts: Optional[List[str]] = Field(
+    output_artifacts: list[str] | None = Field(
         default=None,
         description="Paths of files produced by the agent (populated on COMPLETED).",
     )
 
     @model_validator(mode="after")
-    def error_required_on_failure(self) -> "TaskGraphUpdate":
+    def error_required_on_failure(self) -> TaskGraphUpdate:
         if self.status == TaskStatus.FAILED and not self.error_message:
             raise ValueError("error_message is required when status is 'failed'")
         return self
@@ -298,4 +299,4 @@ class GraphStatusSummary(BaseForgeModel):
     pending_tasks: int
     progress_pct: float
     estimated_duration_minutes: int
-    critical_path: List[str]
+    critical_path: list[str]

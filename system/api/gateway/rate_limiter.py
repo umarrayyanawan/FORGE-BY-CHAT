@@ -1,5 +1,7 @@
 import time
-from fastapi import Request, HTTPException, status
+
+from fastapi import HTTPException, Request, status
+
 from system.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)

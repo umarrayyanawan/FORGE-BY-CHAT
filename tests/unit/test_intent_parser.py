@@ -12,21 +12,19 @@ All LLM calls are mocked.  No external services are required.
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, MagicMock
 import uuid
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from system.core.intent.clarification import ClarificationEngine, CLARIFICATION_FIELD_MAP
+from system.core.intent.clarification import CLARIFICATION_FIELD_MAP, ClarificationEngine
 from system.core.intent.engine import IntentEngine
-from system.core.intent.parser import IntentParser, _FIELD_WEIGHTS
+from system.core.intent.parser import IntentParser
 from system.core.intent.schemas import (
     ClarificationQuestion,
     ClarificationRequest,
     ClarificationResponse,
     IntentParseRequest,
-    IntentParseResponse,
     IntentSession,
     IntentStatus,
     ProjectIntent,
@@ -35,6 +33,7 @@ from system.core.intent.validator import IntentValidator, ValidationResult
 from system.shared.exceptions import IntentError, NotFoundError
 from system.shared.models import DeployTarget, Platform
 
+pytestmark = pytest.mark.unit
 
 # =========================================================================== #
 # Fixtures & helpers
@@ -79,7 +78,11 @@ def _full_intent_json(raw_prompt: str = "Build CRM for marble suppliers") -> str
             ],
             "scale_requirements": "Up to 200 concurrent users",
             "target_users": "Marble suppliers and their inside sales teams",
-            "tech_preferences": {"backend": "FastAPI", "frontend": "React", "database": "PostgreSQL"},
+            "tech_preferences": {
+                "backend": "FastAPI",
+                "frontend": "React",
+                "database": "PostgreSQL",
+            },
             "timeline": "3 months",
             "budget_range": "$30k–$60k",
         }
@@ -404,10 +407,30 @@ class TestClarificationEngine:
         """generate_questions should return at most 3 questions."""
         questions_json = json.dumps(
             [
-                {"question": "What industry?", "field": "industry", "options": None, "required": True},
-                {"question": "What product type?", "field": "product_type", "options": None, "required": True},
-                {"question": "Who are the users?", "field": "target_users", "options": None, "required": True},
-                {"question": "Extra question?", "field": "core_features", "options": None, "required": False},
+                {
+                    "question": "What industry?",
+                    "field": "industry",
+                    "options": None,
+                    "required": True,
+                },
+                {
+                    "question": "What product type?",
+                    "field": "product_type",
+                    "options": None,
+                    "required": True,
+                },
+                {
+                    "question": "Who are the users?",
+                    "field": "target_users",
+                    "options": None,
+                    "required": True,
+                },
+                {
+                    "question": "Extra question?",
+                    "field": "core_features",
+                    "options": None,
+                    "required": False,
+                },
             ]
         )
         llm_client = _make_llm_client(questions_json)
@@ -429,8 +452,18 @@ class TestClarificationEngine:
         """Questions should target the actual missing fields."""
         questions_json = json.dumps(
             [
-                {"question": "What industry?", "field": "industry", "options": None, "required": True},
-                {"question": "What features?", "field": "core_features", "options": None, "required": True},
+                {
+                    "question": "What industry?",
+                    "field": "industry",
+                    "options": None,
+                    "required": True,
+                },
+                {
+                    "question": "What features?",
+                    "field": "core_features",
+                    "options": None,
+                    "required": True,
+                },
             ]
         )
         llm_client = _make_llm_client(questions_json)
@@ -834,8 +867,18 @@ class TestIntentEngine:
         # LLM returns minimal intent (low confidence)
         questions_json = json.dumps(
             [
-                {"question": "What industry?", "field": "industry", "options": None, "required": True},
-                {"question": "What product type?", "field": "product_type", "options": None, "required": True},
+                {
+                    "question": "What industry?",
+                    "field": "industry",
+                    "options": None,
+                    "required": True,
+                },
+                {
+                    "question": "What product type?",
+                    "field": "product_type",
+                    "options": None,
+                    "required": True,
+                },
             ]
         )
 
@@ -1031,8 +1074,7 @@ class TestSchemas:
     def test_clarification_request_caps_to_three_questions(self) -> None:
         """ClarificationRequest should silently truncate to 3 questions."""
         questions = [
-            ClarificationQuestion(question=f"Question {i}?", field=f"field_{i}")
-            for i in range(6)
+            ClarificationQuestion(question=f"Question {i}?", field=f"field_{i}") for i in range(6)
         ]
         req = ClarificationRequest(session_id="s1", questions=questions)
         assert len(req.questions) == 3
@@ -1113,8 +1155,18 @@ class TestIntentEngineEndToEnd:
         """End-to-end: vague prompt → clarification round → complete intent."""
         questions_json = json.dumps(
             [
-                {"question": "What industry?", "field": "industry", "options": None, "required": True},
-                {"question": "What product?", "field": "product_type", "options": None, "required": True},
+                {
+                    "question": "What industry?",
+                    "field": "industry",
+                    "options": None,
+                    "required": True,
+                },
+                {
+                    "question": "What product?",
+                    "field": "product_type",
+                    "options": None,
+                    "required": True,
+                },
             ]
         )
 
@@ -1138,7 +1190,7 @@ class TestIntentEngineEndToEnd:
         # First get returns None (no session yet), subsequent calls return serialised session
         session_store: dict[str, bytes] = {}
 
-        async def redis_get(key: str) -> Optional[bytes]:
+        async def redis_get(key: str) -> bytes | None:
             return session_store.get(key)
 
         async def redis_setex(key: str, ttl: int, value: str) -> bool:

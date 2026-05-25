@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from datetime import datetime
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+import math
+from typing import Any, TypeVar
 
 from pydantic import Field, field_validator
 
@@ -31,10 +31,10 @@ class PaginationParams(BaseForgeModel):
         return (self.page - 1) * self.page_size
 
 
-class PaginatedResponse(BaseForgeModel, Generic[T]):
+class PaginatedResponse[T](BaseForgeModel):
     """Generic envelope for paginated list API responses."""
 
-    items: List[Any] = Field(description="The current page of results")
+    items: list[Any] = Field(description="The current page of results")
     total: int = Field(ge=0, description="Total number of matching items")
     page: int = Field(ge=1, description="Current 1-based page number")
     page_size: int = Field(ge=1, description="Items per page")
@@ -43,10 +43,10 @@ class PaginatedResponse(BaseForgeModel, Generic[T]):
     @classmethod
     def build(
         cls,
-        items: List[Any],
+        items: list[Any],
         total: int,
         params: PaginationParams,
-    ) -> "PaginatedResponse":
+    ) -> PaginatedResponse:
         """Construct a PaginatedResponse from a query result."""
         pages = math.ceil(total / params.page_size) if total else 0
         return cls(
@@ -69,7 +69,7 @@ class HealthCheckResponse(BaseForgeModel):
     status: str = Field(description="'ok' or 'degraded'")
     version: str = Field(description="FORGE application version")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    components: Dict[str, str] = Field(
+    components: dict[str, str] = Field(
         default_factory=dict,
         description="Per-component health status map",
     )
@@ -85,11 +85,11 @@ class ErrorResponse(BaseForgeModel):
 
     error: str = Field(description="Human-readable error description")
     code: str = Field(description="Machine-readable error code (SCREAMING_SNAKE_CASE)")
-    details: Dict[str, Any] = Field(
+    details: dict[str, Any] = Field(
         default_factory=dict,
         description="Optional structured context about the error",
     )
-    request_id: Optional[str] = Field(
+    request_id: str | None = Field(
         default=None,
         description="Trace / request ID for correlation with logs",
     )
@@ -114,29 +114,25 @@ class AgentContractSchema(BaseForgeModel):
     what files it may touch, and the criteria by which its output is judged.
     """
 
-    identity: str = Field(
-        description="The agent's role identifier (e.g. 'backend', 'qa')"
-    )
-    objective: str = Field(
-        description="Plain-English statement of what this agent must accomplish"
-    )
-    allowed_files: List[str] = Field(
+    identity: str = Field(description="The agent's role identifier (e.g. 'backend', 'qa')")
+    objective: str = Field(description="Plain-English statement of what this agent must accomplish")
+    allowed_files: list[str] = Field(
         default_factory=list,
         description="Glob patterns / explicit paths the agent is permitted to read/write",
     )
-    constraints: List[str] = Field(
+    constraints: list[str] = Field(
         default_factory=list,
         description="Hard rules the agent must not violate",
     )
-    validation_rules: List[str] = Field(
+    validation_rules: list[str] = Field(
         default_factory=list,
         description="Automated checks run against the agent's output",
     )
-    success_criteria: List[str] = Field(
+    success_criteria: list[str] = Field(
         default_factory=list,
         description="Human-readable criteria defining 'done'",
     )
-    context: Dict[str, Any] = Field(
+    context: dict[str, Any] = Field(
         default_factory=dict,
         description="Arbitrary structured context injected into the agent prompt",
     )
@@ -165,19 +161,19 @@ class ValidationResultSchema(BaseForgeModel):
     """Structured result of running automated validation checks."""
 
     status: ValidationStatus = Field(description="Overall pass/fail/warn status")
-    checks: List[Dict[str, Any]] = Field(
+    checks: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of individual check results: {'name', 'status', 'message'}",
     )
-    errors: List[str] = Field(
+    errors: list[str] = Field(
         default_factory=list,
         description="Blocking errors that must be resolved before proceeding",
     )
-    warnings: List[str] = Field(
+    warnings: list[str] = Field(
         default_factory=list,
         description="Non-blocking issues that should be reviewed",
     )
-    duration_ms: Optional[float] = Field(
+    duration_ms: float | None = Field(
         default=None,
         description="Wall-clock time taken to run all checks, in milliseconds",
     )

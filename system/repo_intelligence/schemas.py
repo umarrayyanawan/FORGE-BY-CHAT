@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.shared.models import BaseForgeModel
 
@@ -19,10 +19,10 @@ class CodeChunk(BaseForgeModel):
     start_line: int
     end_line: int
     language: str  # "python", "typescript", "javascript"
-    docstring: Optional[str] = None
-    dependencies: List[str] = []       # imported modules/functions
-    exports: List[str] = []            # exported symbols
-    embedding: Optional[List[float]] = None
+    docstring: str | None = None
+    dependencies: list[str] = []  # imported modules/functions
+    exports: list[str] = []  # exported symbols
+    embedding: list[float] | None = None
     project_id: str
 
 
@@ -45,7 +45,7 @@ class DependencyEdge(BaseForgeModel):
     from_file: str
     to_file: str
     dependency_type: str  # "import", "extends", "implements", "uses"
-    symbols: List[str] = []  # specific symbols imported
+    symbols: list[str] = []  # specific symbols imported
 
 
 class ArchitectureNode(BaseForgeModel):
@@ -55,7 +55,7 @@ class ArchitectureNode(BaseForgeModel):
     node_type: str  # "service", "module", "class", "function", "database", "api"
     name: str
     file_path: str
-    properties: Dict[str, Any] = {}
+    properties: dict[str, Any] = {}
 
 
 class SearchResult(BaseForgeModel):
@@ -74,4 +74,4 @@ class IndexingResult(BaseForgeModel):
     files_indexed: int
     chunks_created: int
     time_seconds: float
-    errors: List[str] = []
+    errors: list[str] = []

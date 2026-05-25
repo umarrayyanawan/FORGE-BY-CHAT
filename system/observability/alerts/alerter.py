@@ -18,12 +18,12 @@ Built-in channels
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
+from enum import StrEnum
 import hashlib
 import logging
 import time
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # ========================================================================== #
 
 
-class AlertLevel(str, Enum):
+class AlertLevel(StrEnum):
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -49,7 +49,7 @@ class Alert:
     level: AlertLevel
     title: str
     message: str
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
 
     @property
@@ -58,7 +58,7 @@ class Alert:
         raw = f"{self.level}:{self.title}:{self.message}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "level": self.level,
             "title": self.title,
@@ -239,12 +239,12 @@ class AlertManager:
     """
 
     def __init__(self, dedup_window_seconds: float = 300.0) -> None:
-        self._channels: List[AlertChannel] = []
+        self._channels: list[AlertChannel] = []
         self._dedup_window = dedup_window_seconds
         # fingerprint -> last_sent_timestamp
-        self._sent_cache: Dict[str, float] = {}
+        self._sent_cache: dict[str, float] = {}
 
-    def register(self, channel: AlertChannel) -> "AlertManager":
+    def register(self, channel: AlertChannel) -> AlertManager:
         """Register a channel.  Returns self for fluent chaining."""
         self._channels.append(channel)
         return self
@@ -265,9 +265,7 @@ class AlertManager:
         Duplicate alerts within the dedup window are silently dropped.
         """
         if self._is_duplicate(alert):
-            logger.debug(
-                "Alert suppressed (duplicate): %s — %s", alert.level, alert.title
-            )
+            logger.debug("Alert suppressed (duplicate): %s — %s", alert.level, alert.title)
             return
 
         self._sent_cache[alert.fingerprint] = time.time()
@@ -285,11 +283,7 @@ class AlertManager:
     def clear_dedup_cache(self) -> None:
         """Evict stale entries from the de-duplication cache."""
         now = time.time()
-        expired = [
-            fp
-            for fp, ts in self._sent_cache.items()
-            if (now - ts) > self._dedup_window
-        ]
+        expired = [fp for fp, ts in self._sent_cache.items() if (now - ts) > self._dedup_window]
         for fp in expired:
             del self._sent_cache[fp]
 
@@ -313,7 +307,7 @@ async def alert(
     level: AlertLevel,
     title: str,
     message: str,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
 ) -> None:
     """Top-level convenience function for raising an alert.
 

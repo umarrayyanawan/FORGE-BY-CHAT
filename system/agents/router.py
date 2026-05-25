@@ -106,10 +106,7 @@ async def agent_status(agent_type: str) -> dict[str, Any]:
         valid_types = [t.value for t in AgentType]
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Unknown agent type: {agent_type!r}. "
-                f"Valid types: {valid_types}"
-            ),
+            detail=(f"Unknown agent type: {agent_type!r}. Valid types: {valid_types}"),
         )
 
     if not default_registry.is_registered(agent_enum):
@@ -128,9 +125,7 @@ async def agent_status(agent_type: str) -> dict[str, Any]:
         "primary_language": capabilities.primary_language if capabilities else None,
         "max_concurrent": capabilities.max_concurrent if capabilities else None,
         "can_read_only": capabilities.can_read_only if capabilities else None,
-        "allowed_phases": (
-            [p for p in capabilities.allowed_phases] if capabilities else []
-        ),
+        "allowed_phases": ([p for p in capabilities.allowed_phases] if capabilities else []),
     }
 
 

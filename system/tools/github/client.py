@@ -7,7 +7,7 @@ Actions workflow operations needed by the autonomous agent pipeline.
 from __future__ import annotations
 
 import base64
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -32,9 +32,9 @@ class GitHubClient:
 
     BASE_URL = "https://api.github.com"
 
-    def __init__(self, token: Optional[str] = None) -> None:
+    def __init__(self, token: str | None = None) -> None:
         self.token = token or settings.github_token
-        self.headers: Dict[str, str] = {
+        self.headers: dict[str, str] = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -49,7 +49,7 @@ class GitHubClient:
     # Internal request helper
     # ---------------------------------------------------------------------- #
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> Dict[str, Any]:
+    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         """Execute an authenticated HTTP request and return parsed JSON.
 
         Raises:
@@ -115,10 +115,10 @@ class GitHubClient:
         name: str,
         description: str = "",
         private: bool = True,
-        org: Optional[str] = None,
+        org: str | None = None,
         auto_init: bool = True,
         default_branch: str = "main",
-        topics: Optional[List[str]] = None,
+        topics: list[str] | None = None,
         homepage: str = "",
         has_issues: bool = True,
         has_wiki: bool = False,
@@ -127,7 +127,7 @@ class GitHubClient:
         allow_merge_commit: bool = False,
         allow_rebase_merge: bool = False,
         delete_branch_on_merge: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a new GitHub repository.
 
         Args:
@@ -148,7 +148,7 @@ class GitHubClient:
             Full GitHub API repo object.
         """
         endpoint = f"/orgs/{org}/repos" if org else "/user/repos"
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "name": name,
             "description": description,
             "private": private,
@@ -169,7 +169,7 @@ class GitHubClient:
         logger.info("GitHub repo created", repo=result.get("full_name"), private=private)
         return result
 
-    async def get_repo(self, repo: str) -> Dict[str, Any]:
+    async def get_repo(self, repo: str) -> dict[str, Any]:
         """Fetch repository metadata.
 
         Args:
@@ -186,7 +186,7 @@ class GitHubClient:
         await self._request("DELETE", f"/repos/{repo}")
         logger.warning("GitHub repo deleted", repo=repo)
 
-    async def replace_topics(self, repo: str, topics: List[str]) -> Dict[str, Any]:
+    async def replace_topics(self, repo: str, topics: list[str]) -> dict[str, Any]:
         """Replace all topics on a repository."""
         return await self._request(
             "PUT",
@@ -203,7 +203,7 @@ class GitHubClient:
         repo: str,
         branch_name: str,
         from_branch: str = "main",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a new branch from an existing branch's tip.
 
         Args:
@@ -237,7 +237,7 @@ class GitHubClient:
         await self._request("DELETE", f"/repos/{repo}/git/refs/heads/{branch_name}")
         logger.info("Branch deleted", repo=repo, branch=branch_name)
 
-    async def list_branches(self, repo: str) -> List[str]:
+    async def list_branches(self, repo: str) -> list[str]:
         """Return a list of branch names for the repository.
 
         Args:
@@ -246,7 +246,7 @@ class GitHubClient:
         data = await self._request("GET", f"/repos/{repo}/branches", params={"per_page": 100})
         return [b["name"] for b in data]
 
-    async def get_branch(self, repo: str, branch: str) -> Dict[str, Any]:
+    async def get_branch(self, repo: str, branch: str) -> dict[str, Any]:
         """Fetch branch details including protection status and latest commit."""
         return await self._request("GET", f"/repos/{repo}/branches/{branch}")
 
@@ -258,11 +258,11 @@ class GitHubClient:
         self,
         repo: str,
         branch: str,
-        files: Dict[str, str],
+        files: dict[str, str],
         message: str,
         author_name: str = "FORGE Bot",
         author_email: str = "forge-bot@forge.ai",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Commit multiple files to a branch in a single atomic commit.
 
         Uses the Git Data API to avoid any local git operations.
@@ -287,7 +287,7 @@ class GitHubClient:
         base_tree_sha: str = commit["tree"]["sha"]
 
         # 3. Create a blob for each file.
-        tree_items: List[Dict[str, Any]] = []
+        tree_items: list[dict[str, Any]] = []
         for path, content in files.items():
             blob = await self._request(
                 "POST",
@@ -377,8 +377,8 @@ class GitHubClient:
         content: str,
         message: str,
         branch: str = "main",
-        sha: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        sha: str | None = None,
+    ) -> dict[str, Any]:
         """Create or update a single file using the Contents API.
 
         Args:
@@ -401,7 +401,7 @@ class GitHubClient:
             except ToolError:
                 pass  # File doesn't exist yet — create it
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "message": message,
             "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
             "branch": branch,
@@ -417,8 +417,8 @@ class GitHubClient:
         path: str,
         message: str,
         branch: str = "main",
-        sha: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        sha: str | None = None,
+    ) -> dict[str, Any]:
         """Delete a file from the repository.
 
         Args:
@@ -453,7 +453,7 @@ class GitHubClient:
         base: str = "main",
         draft: bool = False,
         maintainer_can_modify: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Open a pull request.
 
         Args:
@@ -480,10 +480,12 @@ class GitHubClient:
                 "maintainer_can_modify": maintainer_can_modify,
             },
         )
-        logger.info("Pull request created", repo=repo, pr_number=result.get("number"), head=head, base=base)
+        logger.info(
+            "Pull request created", repo=repo, pr_number=result.get("number"), head=head, base=base
+        )
         return result
 
-    async def get_pull_request(self, repo: str, pr_number: int) -> Dict[str, Any]:
+    async def get_pull_request(self, repo: str, pr_number: int) -> dict[str, Any]:
         """Fetch pull request details."""
         return await self._request("GET", f"/repos/{repo}/pulls/{pr_number}")
 
@@ -491,9 +493,9 @@ class GitHubClient:
         self,
         repo: str,
         state: str = "open",
-        base: Optional[str] = None,
+        base: str | None = None,
         per_page: int = 30,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """List pull requests for a repository.
 
         Args:
@@ -502,7 +504,7 @@ class GitHubClient:
             base: Filter by base branch name.
             per_page: Number of results per page (max 100).
         """
-        params: Dict[str, Any] = {"state": state, "per_page": per_page}
+        params: dict[str, Any] = {"state": state, "per_page": per_page}
         if base:
             params["base"] = base
         return await self._request("GET", f"/repos/{repo}/pulls", params=params)
@@ -512,9 +514,9 @@ class GitHubClient:
         repo: str,
         pr_number: int,
         merge_method: str = "squash",
-        commit_title: Optional[str] = None,
-        commit_message: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        commit_title: str | None = None,
+        commit_message: str | None = None,
+    ) -> dict[str, Any]:
         """Merge a pull request.
 
         Args:
@@ -527,7 +529,7 @@ class GitHubClient:
         Returns:
             GitHub API merge result object.
         """
-        payload: Dict[str, Any] = {"merge_method": merge_method}
+        payload: dict[str, Any] = {"merge_method": merge_method}
         if commit_title:
             payload["commit_title"] = commit_title
         if commit_message:
@@ -541,7 +543,9 @@ class GitHubClient:
         logger.info("Pull request merged", repo=repo, pr_number=pr_number, method=merge_method)
         return result
 
-    async def add_pr_labels(self, repo: str, pr_number: int, labels: List[str]) -> List[Dict[str, Any]]:
+    async def add_pr_labels(
+        self, repo: str, pr_number: int, labels: list[str]
+    ) -> list[dict[str, Any]]:
         """Add labels to a pull request."""
         return await self._request(
             "POST",
@@ -553,9 +557,9 @@ class GitHubClient:
         self,
         repo: str,
         pr_number: int,
-        reviewers: List[str],
-        team_reviewers: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        reviewers: list[str],
+        team_reviewers: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Request reviewers for a pull request."""
         return await self._request(
             "POST",
@@ -566,7 +570,7 @@ class GitHubClient:
             },
         )
 
-    async def create_pr_comment(self, repo: str, pr_number: int, body: str) -> Dict[str, Any]:
+    async def create_pr_comment(self, repo: str, pr_number: int, body: str) -> dict[str, Any]:
         """Post a comment on a pull request."""
         return await self._request(
             "POST",
@@ -583,9 +587,9 @@ class GitHubClient:
         repo: str,
         title: str,
         body: str,
-        labels: Optional[List[str]] = None,
-        assignees: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        labels: list[str] | None = None,
+        assignees: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Create a GitHub issue."""
         return await self._request(
             "POST",
@@ -598,7 +602,7 @@ class GitHubClient:
             },
         )
 
-    async def close_issue(self, repo: str, issue_number: int) -> Dict[str, Any]:
+    async def close_issue(self, repo: str, issue_number: int) -> dict[str, Any]:
         """Close an issue."""
         return await self._request(
             "PATCH",
@@ -614,10 +618,10 @@ class GitHubClient:
         self,
         repo: str,
         workflow_id: str,
-        branch: Optional[str] = None,
-        status: Optional[str] = None,
+        branch: str | None = None,
+        status: str | None = None,
         per_page: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """List workflow runs for a specific workflow file or ID.
 
         Args:
@@ -627,7 +631,7 @@ class GitHubClient:
             status: Filter by status: ``"queued"`` | ``"in_progress"`` | ``"completed"``.
             per_page: Number of results to return.
         """
-        params: Dict[str, Any] = {"per_page": per_page}
+        params: dict[str, Any] = {"per_page": per_page}
         if branch:
             params["branch"] = branch
         if status:
@@ -645,7 +649,7 @@ class GitHubClient:
         repo: str,
         workflow_id: str,
         branch: str = "main",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Return the most recent workflow run for the given workflow and branch."""
         runs = await self.get_workflow_runs(repo, workflow_id, branch=branch, per_page=1)
         return runs[0] if runs else None
@@ -655,7 +659,7 @@ class GitHubClient:
         repo: str,
         workflow_id: str,
         ref: str = "main",
-        inputs: Optional[Dict[str, Any]] = None,
+        inputs: dict[str, Any] | None = None,
     ) -> None:
         """Trigger a workflow_dispatch event.
 
@@ -672,7 +676,7 @@ class GitHubClient:
         )
         logger.info("Workflow triggered", repo=repo, workflow=workflow_id, ref=ref)
 
-    async def list_workflow_run_jobs(self, repo: str, run_id: int) -> List[Dict[str, Any]]:
+    async def list_workflow_run_jobs(self, repo: str, run_id: int) -> list[dict[str, Any]]:
         """List jobs for a workflow run."""
         data = await self._request("GET", f"/repos/{repo}/actions/runs/{run_id}/jobs")
         return data.get("jobs", [])
@@ -685,7 +689,7 @@ class GitHubClient:
     # Repository secrets
     # ---------------------------------------------------------------------- #
 
-    async def list_repo_secrets(self, repo: str) -> List[Dict[str, Any]]:
+    async def list_repo_secrets(self, repo: str) -> list[dict[str, Any]]:
         """List repository Actions secrets (names only, not values)."""
         data = await self._request("GET", f"/repos/{repo}/actions/secrets")
         return data.get("secrets", [])
@@ -694,11 +698,11 @@ class GitHubClient:
     # Commit & diff operations
     # ---------------------------------------------------------------------- #
 
-    async def get_commit(self, repo: str, sha: str) -> Dict[str, Any]:
+    async def get_commit(self, repo: str, sha: str) -> dict[str, Any]:
         """Fetch full details of a commit."""
         return await self._request("GET", f"/repos/{repo}/commits/{sha}")
 
-    async def compare_commits(self, repo: str, base: str, head: str) -> Dict[str, Any]:
+    async def compare_commits(self, repo: str, base: str, head: str) -> dict[str, Any]:
         """Compare two commits or branches and return the diff."""
         return await self._request("GET", f"/repos/{repo}/compare/{base}...{head}")
 
@@ -707,7 +711,7 @@ class GitHubClient:
         repo: str,
         branch: str = "main",
         per_page: int = 30,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """List commits on a branch."""
         return await self._request(
             "GET",
@@ -728,7 +732,7 @@ class GitHubClient:
         draft: bool = False,
         prerelease: bool = False,
         target_commitish: str = "main",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a GitHub release.
 
         Args:
@@ -753,7 +757,7 @@ class GitHubClient:
             },
         )
 
-    async def get_latest_release(self, repo: str) -> Dict[str, Any]:
+    async def get_latest_release(self, repo: str) -> dict[str, Any]:
         """Return the latest non-draft, non-prerelease release."""
         return await self._request("GET", f"/repos/{repo}/releases/latest")
 
@@ -767,7 +771,7 @@ class GitHubClient:
         name: str,
         color: str,
         description: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a label on the repository."""
         return await self._request(
             "POST",
@@ -783,13 +787,13 @@ class GitHubClient:
         self,
         repo: str,
         branch: str,
-        required_status_checks: Optional[List[str]] = None,
+        required_status_checks: list[str] | None = None,
         require_pr_reviews: bool = True,
         dismiss_stale_reviews: bool = True,
         require_code_owner_reviews: bool = False,
         required_approving_review_count: int = 1,
         enforce_admins: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Apply branch protection rules.
 
         Args:
@@ -802,7 +806,7 @@ class GitHubClient:
             required_approving_review_count: Minimum number of approvals.
             enforce_admins: Apply rules to repository administrators too.
         """
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "required_status_checks": (
                 {"strict": True, "contexts": required_status_checks}
                 if required_status_checks
@@ -832,11 +836,11 @@ class GitHubClient:
         self,
         repo: str,
         url: str,
-        events: List[str],
-        secret: Optional[str] = None,
+        events: list[str],
+        secret: str | None = None,
         content_type: str = "json",
         active: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Register a webhook on the repository.
 
         Args:
@@ -847,7 +851,7 @@ class GitHubClient:
             content_type: ``"json"`` or ``"form"``.
             active: Whether the webhook is active.
         """
-        config: Dict[str, Any] = {"url": url, "content_type": content_type}
+        config: dict[str, Any] = {"url": url, "content_type": content_type}
         if secret:
             config["secret"] = secret
 
@@ -861,11 +865,11 @@ class GitHubClient:
     # Authenticated user
     # ---------------------------------------------------------------------- #
 
-    async def get_authenticated_user(self) -> Dict[str, Any]:
+    async def get_authenticated_user(self) -> dict[str, Any]:
         """Return the currently authenticated GitHub user."""
         return await self._request("GET", "/user")
 
-    async def get_rate_limit(self) -> Dict[str, Any]:
+    async def get_rate_limit(self) -> dict[str, Any]:
         """Return the current rate limit status for all API categories."""
         return await self._request("GET", "/rate_limit")
 
@@ -877,7 +881,7 @@ class GitHubClient:
         """Gracefully close the underlying httpx client."""
         await self.client.aclose()
 
-    async def __aenter__(self) -> "GitHubClient":
+    async def __aenter__(self) -> GitHubClient:
         return self
 
     async def __aexit__(self, *args: Any) -> None:

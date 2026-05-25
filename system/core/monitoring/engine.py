@@ -1,12 +1,12 @@
 """Monitoring Engine — orchestrates continuous health monitoring for deployed projects."""
+
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.core.monitoring.collector import MetricsCollector
 from system.core.monitoring.schemas import (
-    AlertRule,
     HealthSnapshot,
     MonitoringConfig,
     MonitoringReport,
@@ -19,16 +19,16 @@ logger = get_logger(__name__)
 class MonitoringEngine:
     def __init__(
         self,
-        collector: Optional[MetricsCollector] = None,
+        collector: MetricsCollector | None = None,
         alerter: Any = None,
         db: Any = None,
     ) -> None:
         self.collector = collector or MetricsCollector()
         self.alerter = alerter
         self.db = db
-        self._configs: Dict[str, MonitoringConfig] = {}
-        self._snapshots: Dict[str, List[HealthSnapshot]] = {}
-        self._running: Dict[str, bool] = {}
+        self._configs: dict[str, MonitoringConfig] = {}
+        self._snapshots: dict[str, list[HealthSnapshot]] = {}
+        self._running: dict[str, bool] = {}
 
     async def start_monitoring(self, config: MonitoringConfig) -> None:
         self._configs[config.project_id] = config
@@ -68,9 +68,7 @@ class MonitoringEngine:
 
             await asyncio.sleep(config.check_interval_seconds)
 
-    async def _evaluate_alerts(
-        self, config: MonitoringConfig, snapshot: HealthSnapshot
-    ) -> None:
+    async def _evaluate_alerts(self, config: MonitoringConfig, snapshot: HealthSnapshot) -> None:
         if not self.alerter or not config.alert_rules:
             return
         for rule in config.alert_rules:
@@ -103,9 +101,7 @@ class MonitoringEngine:
         failed = sum(1 for s in snapshots if s.status != "healthy")
         uptime = ((total - failed) / total * 100) if total > 0 else 100.0
 
-        response_times = [
-            s.response_time_ms for s in snapshots if s.response_time_ms is not None
-        ]
+        response_times = [s.response_time_ms for s in snapshots if s.response_time_ms is not None]
         avg_rt = sum(response_times) / len(response_times) if response_times else None
 
         return MonitoringReport(

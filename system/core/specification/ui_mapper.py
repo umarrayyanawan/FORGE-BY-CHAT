@@ -14,9 +14,9 @@ from typing import Any
 from system.core.intent.schemas import ProjectIntent
 from system.core.specification.schemas import APIContract, UIPage, UIStructure
 from system.observability.logging.logger import get_logger
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import SpecificationError
 from system.shared.llm_client import LLMMessage, get_llm_client
-from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.models import Platform
 
 logger = get_logger(__name__)
@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------- #
 # Baseline pages present in every web application
 # ---------------------------------------------------------------------- #
+
 
 def _baseline_pages() -> list[UIPage]:
     return [
@@ -102,9 +103,7 @@ class UIMapper:
     def __init__(self, llm_client: Any | None = None) -> None:
         self._llm = llm_client or get_llm_client()
 
-    async def map(
-        self, intent: ProjectIntent, api_contract: APIContract
-    ) -> UIStructure:
+    async def map(self, intent: ProjectIntent, api_contract: APIContract) -> UIStructure:
         """Generate a UIStructure from an intent and API contract.
 
         Args:
@@ -164,17 +163,12 @@ class UIMapper:
         # Merge baseline + domain pages, deduplicating by route
         baseline = _baseline_pages()
         baseline_routes = {p.route for p in baseline}
-        unique_domain_pages = [
-            p for p in domain_structure.pages
-            if p.route not in baseline_routes
-        ]
+        unique_domain_pages = [p for p in domain_structure.pages if p.route not in baseline_routes]
         all_pages = baseline + unique_domain_pages
 
         # Merge global components
         combined_globals = list(
-            dict.fromkeys(
-                _BASELINE_GLOBAL_COMPONENTS + domain_structure.global_components
-            )
+            dict.fromkeys(_BASELINE_GLOBAL_COMPONENTS + domain_structure.global_components)
         )
 
         # Build navigation from non-auth pages
@@ -214,9 +208,7 @@ class UIMapper:
             Output ONLY valid JSON — no markdown fences, no explanations.
         """)
 
-    def _build_ui_prompt(
-        self, intent: ProjectIntent, api_contract: APIContract
-    ) -> str:
+    def _build_ui_prompt(self, intent: ProjectIntent, api_contract: APIContract) -> str:
         """Construct the LLM prompt for domain UI page generation."""
         features = "\n".join(f"- {f}" for f in intent.core_features)
 
@@ -362,7 +354,10 @@ class UIMapper:
 
         for page in pages:
             if not page.auth_required or page.route in (
-                "/login", "/register", "/forgot-password", "/404"
+                "/login",
+                "/register",
+                "/forgot-password",
+                "/404",
             ):
                 continue
 

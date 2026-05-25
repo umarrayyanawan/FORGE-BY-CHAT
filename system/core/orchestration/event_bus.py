@@ -22,15 +22,14 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import json
-import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from redis.asyncio import Redis
 from redis.asyncio.client import PubSub
 
 from system.core.orchestration.event_schemas import (
-    EVENT_TYPE_REGISTRY,
     ForgeEvent,
     deserialize_event,
 )
@@ -70,13 +69,13 @@ class EventBus:
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
         # project_id → list of async callables
-        self._handlers: Dict[str, List[Callable]] = {}
+        self._handlers: dict[str, list[Callable]] = {}
         # project_id → background listener task
-        self._listener_tasks: Dict[str, asyncio.Task] = {}
+        self._listener_tasks: dict[str, asyncio.Task] = {}
         # "all" listeners (subscribe_all)
-        self._global_handlers: List[Callable] = []
-        self._global_listener_task: Optional[asyncio.Task] = None
-        self._global_pubsub: Optional[PubSub] = None
+        self._global_handlers: list[Callable] = []
+        self._global_listener_task: asyncio.Task | None = None
+        self._global_pubsub: PubSub | None = None
 
     # ------------------------------------------------------------------ #
     # Publish
@@ -182,7 +181,7 @@ class EventBus:
             task.cancel()
             try:
                 await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.CancelledError):
                 pass
 
         logger.info("event_bus_unsubscribed", project_id=project_id)
@@ -195,8 +194,8 @@ class EventBus:
         self,
         project_id: str,
         limit: int = 100,
-        since_timestamp_ms: Optional[float] = None,
-    ) -> List[ForgeEvent]:
+        since_timestamp_ms: float | None = None,
+    ) -> list[ForgeEvent]:
         """Retrieve the most recent events for *project_id* from the sorted set.
 
         Args:
@@ -211,7 +210,7 @@ class EventBus:
 
         if since_timestamp_ms is not None:
             # Range query: score from since_timestamp_ms to +inf
-            raw_entries: List[str] = await self._redis.zrangebyscore(
+            raw_entries: list[str] = await self._redis.zrangebyscore(
                 history_key,
                 min=since_timestamp_ms,
                 max="+inf",
@@ -220,11 +219,9 @@ class EventBus:
             )
         else:
             # Most recent `limit` entries (reverse order = newest first)
-            raw_entries = await self._redis.zrevrange(
-                history_key, 0, limit - 1
-            )
+            raw_entries = await self._redis.zrevrange(history_key, 0, limit - 1)
 
-        events: List[ForgeEvent] = []
+        events: list[ForgeEvent] = []
         for raw in raw_entries:
             try:
                 event = self._deserialize_event(raw)
@@ -258,7 +255,7 @@ class EventBus:
     def _deserialize_event(self, data: str) -> ForgeEvent:
         """Deserialize a JSON string into the most specific ForgeEvent subclass."""
         try:
-            raw: Dict[str, Any] = json.loads(data)
+            raw: dict[str, Any] = json.loads(data)
             return deserialize_event(raw)
         except Exception as exc:
             raise ValueError(f"Cannot deserialize event: {exc}") from exc
@@ -357,7 +354,7 @@ class EventBus:
     # Context manager support
     # ------------------------------------------------------------------ #
 
-    async def __aenter__(self) -> "EventBus":
+    async def __aenter__(self) -> EventBus:
         return self
 
     async def __aexit__(self, *args: Any) -> None:

@@ -1,8 +1,9 @@
 """Architecture validator — ensures generated code matches architectural intent."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from system.core.verification.schemas import ValidationCheck, ValidationStatus
 from system.observability.logging.logger import get_logger
@@ -14,7 +15,7 @@ class ArchitectureValidator:
     def __init__(self, llm_client: Any = None) -> None:
         self.llm_client = llm_client
 
-    async def validate(self, project_path: str, arch_plan: Any = None) -> List[ValidationCheck]:
+    async def validate(self, project_path: str, arch_plan: Any = None) -> list[ValidationCheck]:
         root = Path(project_path)
         checks = [
             await self._check_layering(root),
@@ -25,7 +26,7 @@ class ArchitectureValidator:
         return checks
 
     async def _check_layering(self, root: Path) -> ValidationCheck:
-        violations: List[str] = []
+        violations: list[str] = []
         api_files = list(root.rglob("system/api/**/*.py")) if root.exists() else []
         for f in api_files:
             try:
@@ -52,7 +53,7 @@ class ArchitectureValidator:
         )
 
     async def _check_agent_isolation(self, root: Path) -> ValidationCheck:
-        violations: List[str] = []
+        violations: list[str] = []
         agent_dir = root / "system" / "agents"
         if agent_dir.exists():
             for agent_file in agent_dir.rglob("*.py"):
@@ -60,8 +61,11 @@ class ArchitectureValidator:
                     content = agent_file.read_text()
                     if "from system.agents." in content and "base" not in str(agent_file):
                         other_agents = [
-                            line for line in content.splitlines()
-                            if "from system.agents." in line and "base" not in line and "registry" not in line
+                            line
+                            for line in content.splitlines()
+                            if "from system.agents." in line
+                            and "base" not in line
+                            and "registry" not in line
                         ]
                         violations.extend(other_agents)
                 except OSError:

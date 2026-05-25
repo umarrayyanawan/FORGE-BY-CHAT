@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, List
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         min_length=32,
         description="HMAC / JWT signing key",
     )
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
 
     @field_validator("cors_origins", mode="before")

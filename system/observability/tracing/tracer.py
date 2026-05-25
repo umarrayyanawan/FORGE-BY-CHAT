@@ -20,10 +20,11 @@ Call ``setup_tracing("forge-api")`` once at application startup, then:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextvars import ContextVar
 import functools
 import logging
-from contextvars import ContextVar
-from typing import Any, Callable, Optional
+from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -35,7 +36,7 @@ from opentelemetry.sdk.trace.export import (
     ConsoleSpanExporter,
     SimpleSpanProcessor,
 )
-from opentelemetry.trace import Tracer, NonRecordingSpan, SpanContext
+from opentelemetry.trace import NonRecordingSpan, SpanContext, Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ logger = logging.getLogger(__name__)
 _current_trace_id: ContextVar[str] = ContextVar("trace_id", default="")
 
 # Module-level provider reference (set by setup_tracing)
-_provider: Optional[TracerProvider] = None
+_provider: TracerProvider | None = None
 
 
 # ========================================================================== #
@@ -150,10 +151,10 @@ def set_trace_id(trace_id: str) -> None:
 
 
 def trace_function(
-    span_name: Optional[str] = None,
+    span_name: str | None = None,
     *,
     record_exception: bool = True,
-    attributes: Optional[dict[str, Any]] = None,
+    attributes: dict[str, Any] | None = None,
 ) -> Callable:
     """Decorator that wraps a sync or async function in an OTel span.
 
@@ -185,9 +186,7 @@ def trace_function(
                     except Exception as exc:
                         if record_exception:
                             span.record_exception(exc)
-                            span.set_status(
-                                trace.StatusCode.ERROR, str(exc)
-                            )
+                            span.set_status(trace.StatusCode.ERROR, str(exc))
                         raise
 
             return async_wrapper
@@ -203,9 +202,7 @@ def trace_function(
                     except Exception as exc:
                         if record_exception:
                             span.record_exception(exc)
-                            span.set_status(
-                                trace.StatusCode.ERROR, str(exc)
-                            )
+                            span.set_status(trace.StatusCode.ERROR, str(exc))
                         raise
 
             return sync_wrapper
@@ -225,7 +222,7 @@ def _is_async(func: Callable) -> bool:
     return asyncio.iscoroutinefunction(func) or inspect.iscoroutinefunction(func)
 
 
-def _set_span_attrs(span: Any, attributes: Optional[dict[str, Any]]) -> None:
+def _set_span_attrs(span: Any, attributes: dict[str, Any] | None) -> None:
     if attributes:
         for k, v in attributes.items():
             try:

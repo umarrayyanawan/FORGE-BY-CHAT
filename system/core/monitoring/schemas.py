@@ -1,8 +1,8 @@
 """Monitoring schemas — health snapshots, metric samples, and alert configs."""
+
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 
@@ -13,7 +13,7 @@ class MetricSample(BaseForgeModel):
     metric_name: str
     value: float
     unit: str = ""
-    labels: Dict[str, str] = {}
+    labels: dict[str, str] = {}
 
 
 class HealthSnapshot(TimestampedModel):
@@ -22,10 +22,10 @@ class HealthSnapshot(TimestampedModel):
     deployment_id: str
     status: str = "healthy"
     endpoint_url: str = ""
-    response_time_ms: Optional[float] = None
-    status_code: Optional[int] = None
-    error: Optional[str] = None
-    metrics: List[MetricSample] = []
+    response_time_ms: float | None = None
+    status_code: int | None = None
+    error: str | None = None
+    metrics: list[MetricSample] = []
 
 
 class AlertRule(BaseForgeModel):
@@ -43,16 +43,16 @@ class MonitoringConfig(BaseForgeModel):
     deployment_id: str
     endpoint_url: str
     check_interval_seconds: int = 60
-    alert_rules: List[AlertRule] = []
+    alert_rules: list[AlertRule] = []
     enabled: bool = True
 
 
 class MonitoringReport(TimestampedModel):
     report_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     project_id: str
-    snapshots: List[HealthSnapshot] = []
+    snapshots: list[HealthSnapshot] = []
     uptime_percentage: float = 100.0
-    avg_response_time_ms: Optional[float] = None
+    avg_response_time_ms: float | None = None
     total_checks: int = 0
     failed_checks: int = 0
     alerts_triggered: int = 0

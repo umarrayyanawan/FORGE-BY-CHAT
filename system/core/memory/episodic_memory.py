@@ -1,7 +1,8 @@
 """Episodic memory — stores specific events: task outcomes, deployments, fixes."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from system.core.memory.schemas import MemoryEntry, MemoryType
 from system.observability.logging.logger import get_logger
@@ -16,10 +17,10 @@ class EpisodicMemory:
         self.db = db
         self.redis = redis
         self.llm_client = llm_client
-        self._episodes: List[MemoryEntry] = []
+        self._episodes: list[MemoryEntry] = []
 
     async def record_task(
-        self, task_id: str, project_id: str, outcome: str, details: Dict[str, Any]
+        self, task_id: str, project_id: str, outcome: str, details: dict[str, Any]
     ) -> MemoryEntry:
         entry = MemoryEntry(
             project_id=project_id,
@@ -33,7 +34,7 @@ class EpisodicMemory:
         return entry
 
     async def record_deployment(
-        self, deployment_id: str, project_id: str, outcome: str, details: Dict[str, Any]
+        self, deployment_id: str, project_id: str, outcome: str, details: dict[str, Any]
     ) -> MemoryEntry:
         entry = MemoryEntry(
             project_id=project_id,
@@ -46,9 +47,7 @@ class EpisodicMemory:
         self._episodes.append(entry)
         return entry
 
-    async def record_fix(
-        self, task_id: str, error: str, fix: str, project_id: str
-    ) -> MemoryEntry:
+    async def record_fix(self, task_id: str, error: str, fix: str, project_id: str) -> MemoryEntry:
         entry = MemoryEntry(
             project_id=project_id,
             memory_type=MemoryType.EPISODIC,
@@ -60,12 +59,12 @@ class EpisodicMemory:
         self._episodes.append(entry)
         return entry
 
-    async def get_project_timeline(self, project_id: str) -> List[MemoryEntry]:
+    async def get_project_timeline(self, project_id: str) -> list[MemoryEntry]:
         return [e for e in self._episodes if e.project_id == project_id]
 
     async def get_similar_episodes(
         self, project_id: str, description: str, limit: int = 5
-    ) -> List[MemoryEntry]:
+    ) -> list[MemoryEntry]:
         entries = [e for e in self._episodes if e.project_id == project_id]
         return sorted(entries, key=lambda e: e.importance, reverse=True)[:limit]
 

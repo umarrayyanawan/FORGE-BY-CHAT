@@ -22,7 +22,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.core.orchestration.event_schemas import (
     PhaseCompletedEvent,
@@ -35,7 +35,7 @@ from system.core.orchestration.task_graph import TaskGraphEngine
 from system.core.orchestration.task_schemas import TaskGraph, TaskNode
 from system.observability.logging.logger import get_logger
 from system.shared.exceptions import OrchestrationError
-from system.shared.models import ExecutionPhase, TaskStatus
+from system.shared.models import ExecutionPhase
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 # Phase transition map
 # ---------------------------------------------------------------------------
 
-PHASE_TRANSITIONS: Dict[ExecutionPhase, Optional[ExecutionPhase]] = {
+PHASE_TRANSITIONS: dict[ExecutionPhase, ExecutionPhase | None] = {
     ExecutionPhase.INTENT: ExecutionPhase.CLARIFICATION,
     ExecutionPhase.CLARIFICATION: ExecutionPhase.SPECIFICATION,
     ExecutionPhase.SPECIFICATION: ExecutionPhase.ARCHITECTURE,
@@ -58,7 +58,7 @@ PHASE_TRANSITIONS: Dict[ExecutionPhase, Optional[ExecutionPhase]] = {
 }
 
 # Celery queue per agent type
-_AGENT_QUEUE_MAP: Dict[str, str] = {
+_AGENT_QUEUE_MAP: dict[str, str] = {
     "architect": "forge.agents.architect",
     "backend": "forge.agents.backend",
     "frontend": "forge.agents.frontend",
@@ -83,10 +83,10 @@ class WorkflowEngine:
 
     def __init__(
         self,
-        task_graph_engine: Optional[TaskGraphEngine] = None,
-        state_manager: Optional[StateManager] = None,
+        task_graph_engine: TaskGraphEngine | None = None,
+        state_manager: StateManager | None = None,
         event_bus: Any = None,
-        retry_manager: Optional[RetryManager] = None,
+        retry_manager: RetryManager | None = None,
         celery_app: Any = None,
     ) -> None:
         self._tge = task_graph_engine or TaskGraphEngine()
@@ -100,7 +100,7 @@ class WorkflowEngine:
     # Workflow lifecycle
     # ------------------------------------------------------------------
 
-    async def start_workflow(self, project_id: str, graph: Optional[TaskGraph] = None) -> str:
+    async def start_workflow(self, project_id: str, graph: TaskGraph | None = None) -> str:
         """Initialise execution state and dispatch the first wave of ready tasks.
 
         Args:
@@ -108,6 +108,7 @@ class WorkflowEngine:
             graph:       Fully-built TaskGraph for the execution phase.
         """
         import uuid as _uuid
+
         workflow_id = str(_uuid.uuid4())
 
         if graph is None:
@@ -178,7 +179,7 @@ class WorkflowEngine:
         # Re-load graph and dispatch ready tasks
         # (In production, graph_id would be looked up from state metadata)
         state = await self._state.get_state(project_id)
-        graph_id: Optional[str] = state.metadata.get("graph_id")
+        graph_id: str | None = state.metadata.get("graph_id")
         if graph_id:
             try:
                 graph = await self._tge.load_graph(graph_id)
@@ -224,9 +225,7 @@ class WorkflowEngine:
             logger.warning("TaskCompletedEvent missing task_id", event_id=event.event_id)
             return
 
-        await self._state.mark_task_completed(
-            project_id, task_id, event.output_artifacts
-        )
+        await self._state.mark_task_completed(project_id, task_id, event.output_artifacts)
         logger.info(
             "Task completed",
             project_id=project_id,
@@ -236,7 +235,7 @@ class WorkflowEngine:
 
         # Load graph from state metadata
         state = await self._state.get_state(project_id)
-        graph_id: Optional[str] = state.metadata.get("graph_id")
+        graph_id: str | None = state.metadata.get("graph_id")
         if not graph_id:
             logger.warning("No graph_id in state metadata", project_id=project_id)
             return
@@ -266,9 +265,7 @@ class WorkflowEngine:
 
         # Check phase completion
         current_phase = state.phase
-        is_complete = await self._state.is_phase_complete(
-            project_id, graph, current_phase
-        )
+        is_complete = await self._state.is_phase_complete(project_id, graph, current_phase)
         if is_complete:
             await self.advance_phase(project_id, current_phase)
 
@@ -286,7 +283,7 @@ class WorkflowEngine:
 
         # Load the task node
         state = await self._state.get_state(project_id)
-        graph_id: Optional[str] = state.metadata.get("graph_id")
+        graph_id: str | None = state.metadata.get("graph_id")
         if not graph_id:
             return
 
@@ -316,9 +313,7 @@ class WorkflowEngine:
     # Phase transition
     # ------------------------------------------------------------------
 
-    async def advance_phase(
-        self, project_id: str, current: ExecutionPhase
-    ) -> None:
+    async def advance_phase(self, project_id: str, current: ExecutionPhase) -> None:
         """Transition from *current* to the next pipeline phase.
 
         Emits a PhaseCompletedEvent on every transition.
@@ -400,11 +395,11 @@ class WorkflowEngine:
     # Summary / introspection
     # ------------------------------------------------------------------
 
-    async def get_execution_summary(self, project_id: str) -> Dict[str, Any]:
+    async def get_execution_summary(self, project_id: str) -> dict[str, Any]:
         """Return a human-readable execution summary for *project_id*."""
         state = await self._state.get_state(project_id)
-        graph_id: Optional[str] = state.metadata.get("graph_id")
-        progress: Dict[str, Any] = {}
+        graph_id: str | None = state.metadata.get("graph_id")
+        progress: dict[str, Any] = {}
 
         if graph_id:
             try:

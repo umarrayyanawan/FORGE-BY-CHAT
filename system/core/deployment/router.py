@@ -1,7 +1,8 @@
 """FastAPI router for Deployment Engine endpoints."""
+
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -16,6 +17,7 @@ def _get_engine() -> Any:
     from system.core.deployment.provisioner import InfraProvisioner
     from system.core.deployment.rollback import RollbackManager
     from system.core.deployment.secrets_manager import SecretsManager
+
     provisioner = InfraProvisioner()
     return DeploymentEngine(
         provisioner=provisioner,
@@ -33,7 +35,7 @@ async def deploy_project(project_id: str, config: DeploymentConfig):
 
 
 @router.post("/{project_id}/rollback")
-async def rollback_deployment(project_id: str, deployment_id: str) -> Dict[str, Any]:
+async def rollback_deployment(project_id: str, deployment_id: str) -> dict[str, Any]:
     """Rollback a deployment to the previous stable version."""
     engine = _get_engine()
     record = await engine.rollback(deployment_id)
@@ -41,7 +43,7 @@ async def rollback_deployment(project_id: str, deployment_id: str) -> Dict[str, 
 
 
 @router.get("/{project_id}/status")
-async def get_deployment_status(project_id: str) -> Dict[str, Any]:
+async def get_deployment_status(project_id: str) -> dict[str, Any]:
     """Get the current deployment status for a project."""
     engine = _get_engine()
     record = await engine.get_latest_deployment(project_id)
@@ -51,7 +53,7 @@ async def get_deployment_status(project_id: str) -> Dict[str, Any]:
 
 
 @router.get("/{project_id}/health")
-async def check_deployment_health(project_id: str) -> Dict[str, Any]:
+async def check_deployment_health(project_id: str) -> dict[str, Any]:
     """Run a health check against the latest deployed endpoint."""
     engine = _get_engine()
     record = await engine.get_latest_deployment(project_id)

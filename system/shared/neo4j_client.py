@@ -9,12 +9,13 @@ Provides:
 
 from __future__ import annotations
 
-import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from functools import lru_cache
-from typing import Any, AsyncIterator, Dict, List, Optional
+import logging
+from typing import Any
 
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession, Record
+from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession, Record
 
 from system.config.settings import settings
 
@@ -77,8 +78,8 @@ class NeoDB:
     @staticmethod
     async def run_query(
         cypher: str,
-        params: Optional[Dict[str, Any]] = None,
-    ) -> List[Record]:
+        params: dict[str, Any] | None = None,
+    ) -> list[Record]:
         """Execute an arbitrary Cypher query and return all result records.
 
         Args:
@@ -99,8 +100,8 @@ class NeoDB:
     @staticmethod
     async def create_node(
         label: str,
-        props: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        props: dict[str, Any],
+    ) -> dict[str, Any]:
         """Create a node with the given label and properties.
 
         The node's ``id`` property is used as the unique identifier; callers
@@ -109,10 +110,7 @@ class NeoDB:
         Returns:
             The properties of the newly created node.
         """
-        cypher = (
-            f"CREATE (n:{label} $props) "
-            "RETURN properties(n) AS node"
-        )
+        cypher = f"CREATE (n:{label} $props) RETURN properties(n) AS node"
         async with get_neo4j() as session:
             result = await session.run(cypher, props=props)
             record = await result.single()
@@ -123,8 +121,8 @@ class NeoDB:
     @staticmethod
     async def find_node(
         label: str,
-        props: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+        props: dict[str, Any],
+    ) -> dict[str, Any] | None:
         """Find the first node matching label + property filter.
 
         Returns:
@@ -132,11 +130,7 @@ class NeoDB:
         """
         # Build a WHERE clause from props
         conditions = " AND ".join(f"n.{k} = ${k}" for k in props)
-        cypher = (
-            f"MATCH (n:{label}) "
-            f"WHERE {conditions} "
-            "RETURN properties(n) AS node LIMIT 1"
-        )
+        cypher = f"MATCH (n:{label}) WHERE {conditions} RETURN properties(n) AS node LIMIT 1"
         async with get_neo4j() as session:
             result = await session.run(cypher, **props)
             record = await result.single()
@@ -145,27 +139,23 @@ class NeoDB:
     @staticmethod
     async def upsert_node(
         label: str,
-        match_props: Dict[str, Any],
-        set_props: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        match_props: dict[str, Any],
+        set_props: dict[str, Any],
+    ) -> dict[str, Any]:
         """MERGE a node on *match_props* and set *set_props* on match/create.
 
         Returns:
             The node's properties after the merge.
         """
-        merge_clause = ", ".join(f"n.{k} = $match_{k}" for k in match_props)
+        ", ".join(f"n.{k} = $match_{k}" for k in match_props)
         set_clause = ", ".join(f"n.{k} = $set_{k}" for k in set_props)
 
-        params: Dict[str, Any] = {f"match_{k}": v for k, v in match_props.items()}
+        params: dict[str, Any] = {f"match_{k}": v for k, v in match_props.items()}
         params.update({f"set_{k}": v for k, v in set_props.items()})
 
         # Build match props literal for MERGE
         match_literal = "{" + ", ".join(f"{k}: $match_{k}" for k in match_props) + "}"
-        cypher = (
-            f"MERGE (n:{label} {match_literal}) "
-            f"SET {set_clause} "
-            "RETURN properties(n) AS node"
-        )
+        cypher = f"MERGE (n:{label} {match_literal}) SET {set_clause} RETURN properties(n) AS node"
         async with get_neo4j() as session:
             result = await session.run(cypher, **params)
             record = await result.single()
@@ -182,8 +172,8 @@ class NeoDB:
         from_id: str,
         to_id: str,
         rel_type: str,
-        props: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        props: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Create a directed relationship between two nodes identified by id.
 
         Args:
@@ -229,9 +219,9 @@ class NeoDB:
     async def traverse_graph(
         start_id: str,
         max_depth: int = 3,
-        rel_types: Optional[List[str]] = None,
+        rel_types: list[str] | None = None,
         direction: str = "OUTBOUND",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """BFS/DFS traversal starting from *start_id* up to *max_depth* hops.
 
         Args:
@@ -274,15 +264,11 @@ class NeoDB:
 
         async with get_neo4j() as session:
             try:
-                result = await session.run(
-                    cypher, start_id=start_id, max_depth=max_depth
-                )
+                result = await session.run(cypher, start_id=start_id, max_depth=max_depth)
                 records = await result.data()
             except Exception:
                 # APOC not available — use plain Cypher path query
-                result = await session.run(
-                    cypher_no_apoc, start_id=start_id
-                )
+                result = await session.run(cypher_no_apoc, start_id=start_id)
                 records = await result.data()
 
         return [
@@ -304,11 +290,7 @@ class NeoDB:
         Returns:
             Number of nodes deleted (0 or 1).
         """
-        cypher = (
-            "MATCH (n {id: $node_id}) "
-            "DETACH DELETE n "
-            "RETURN count(n) AS deleted"
-        )
+        cypher = "MATCH (n {id: $node_id}) DETACH DELETE n RETURN count(n) AS deleted"
         async with get_neo4j() as session:
             result = await session.run(cypher, node_id=node_id)
             record = await result.single()

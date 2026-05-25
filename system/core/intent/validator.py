@@ -6,16 +6,15 @@ coherence, and feasibility before handing it off to the Specification phase.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import json
 import re
-from dataclasses import dataclass, field
-from typing import Any, List, Optional, Set
+from typing import Any
 
 from system.observability.logging.logger import get_logger
-from system.shared.constants import DEFAULT_LLM_MODEL, DEFAULT_LLM_TEMPERATURE
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import IntentError
-from system.shared.llm_client import LLMMessage, LLMResponse, get_llm_client
-from system.shared.models import DeployTarget, Platform
+from system.shared.llm_client import LLMMessage, LLMResponse
 
 from .schemas import ProjectIntent
 
@@ -45,9 +44,9 @@ class ValidationResult:
     """
 
     is_valid: bool = True
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    suggestions: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
 
     def add_error(self, message: str) -> None:
         self.errors.append(message)
@@ -72,7 +71,7 @@ class ValidationResult:
 # Constraint conflict pairs
 # =========================================================================== #
 
-_CONFLICTING_CONSTRAINTS: List[tuple[str, str, str]] = [
+_CONFLICTING_CONSTRAINTS: list[tuple[str, str, str]] = [
     (
         "offline",
         "real-time",
@@ -109,7 +108,7 @@ _CONFLICTING_CONSTRAINTS: List[tuple[str, str, str]] = [
 # Platform ↔ DeployTarget compatibility matrix
 # =========================================================================== #
 
-_INCOMPATIBLE_DEPLOY: dict[str, Set[str]] = {
+_INCOMPATIBLE_DEPLOY: dict[str, set[str]] = {
     "vercel": {"desktop", "cli"},  # Vercel is web-only
     "railway": {"desktop"},
 }
@@ -125,7 +124,7 @@ class IntentValidator:
         analysis.  When None, coherence checks are skipped gracefully.
     """
 
-    def __init__(self, llm_client: Optional[Any] = None) -> None:
+    def __init__(self, llm_client: Any | None = None) -> None:
         self._llm = llm_client
         self._log = logger
 
@@ -156,7 +155,9 @@ class IntentValidator:
             recovered from.
         """
         result = ValidationResult()
-        self._log.info("validating_intent", industry=intent.industry, product_type=intent.product_type)
+        self._log.info(
+            "validating_intent", industry=intent.industry, product_type=intent.product_type
+        )
 
         # --- Structural checks (synchronous) ---
         self._validate_required_fields(intent, result)
@@ -193,9 +194,7 @@ class IntentValidator:
     # Individual checks
     # ---------------------------------------------------------------------- #
 
-    def _validate_required_fields(
-        self, intent: ProjectIntent, result: ValidationResult
-    ) -> None:
+    def _validate_required_fields(self, intent: ProjectIntent, result: ValidationResult) -> None:
         """Ensure all critical fields are non-empty."""
         required = {
             "industry": "The project industry must be specified.",
@@ -218,9 +217,7 @@ class IntentValidator:
             if not self._is_populated(field_name, val):
                 result.add_warning(warning_message)
 
-    def _validate_deployment_target(
-        self, intent: ProjectIntent, result: ValidationResult
-    ) -> None:
+    def _validate_deployment_target(self, intent: ProjectIntent, result: ValidationResult) -> None:
         """Check that deployment target is compatible with the platform."""
         deploy = str(intent.deployment_target).lower()
         platform = str(intent.platform).lower()
@@ -293,7 +290,8 @@ class IntentValidator:
 
         vague_terms = {"system", "app", "application", "platform", "software", "tool", "thing"}
         vague_features = [
-            f for f in intent.core_features
+            f
+            for f in intent.core_features
             if len(f.split()) <= 2 and any(word.lower() in vague_terms for word in f.split())
         ]
         if vague_features:
@@ -315,16 +313,21 @@ class IntentValidator:
                 "specification phase can produce a complete architecture."
             )
 
-    def _validate_scale_requirements(
-        self, intent: ProjectIntent, result: ValidationResult
-    ) -> None:
+    def _validate_scale_requirements(self, intent: ProjectIntent, result: ValidationResult) -> None:
         """Infer scale-target mismatches from stated requirements."""
         scale = intent.scale_requirements.lower()
         if not scale:
             return
 
         # Large scale + Docker single-container warning
-        large_scale_keywords = ["million", "100k", "1 million", "10 million", "high availability", "ha"]
+        large_scale_keywords = [
+            "million",
+            "100k",
+            "1 million",
+            "10 million",
+            "high availability",
+            "ha",
+        ]
         is_large_scale = any(kw in scale for kw in large_scale_keywords)
         if is_large_scale and str(intent.deployment_target).lower() == "docker":
             result.add_suggestion(
@@ -377,8 +380,8 @@ class IntentValidator:
             return
 
         coherent = data.get("coherent", True)
-        issues: List[str] = data.get("issues", [])
-        suggestions: List[str] = data.get("suggestions", [])
+        issues: list[str] = data.get("issues", [])
+        suggestions: list[str] = data.get("suggestions", [])
 
         if not coherent and issues:
             for issue in issues[:3]:  # Cap to avoid overly noisy output

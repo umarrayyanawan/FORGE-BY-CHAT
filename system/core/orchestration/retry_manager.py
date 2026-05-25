@@ -15,10 +15,9 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
-import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Type
+import math
+from typing import Any
 
 from system.core.orchestration.event_schemas import (
     RetryTriggeredEvent,
@@ -31,7 +30,6 @@ from system.shared.constants import MAX_AGENT_RETRIES
 from system.shared.exceptions import (
     AgentError,
     ExecutionError,
-    ForgeError,
     OrchestrationError,
     RateLimitError,
     ToolError,
@@ -45,7 +43,7 @@ logger = get_logger(__name__)
 # ========================================================================== #
 
 # Error types that are transient and should be retried
-_RETRYABLE_ERROR_TYPES: Set[Type[Exception]] = {
+_RETRYABLE_ERROR_TYPES: set[type[Exception]] = {
     AgentError,
     ExecutionError,
     ToolError,
@@ -56,7 +54,7 @@ _RETRYABLE_ERROR_TYPES: Set[Type[Exception]] = {
 }
 
 # Error types that are permanent and must NOT be retried
-_PERMANENT_ERROR_TYPES: Set[Type[Exception]] = {
+_PERMANENT_ERROR_TYPES: set[type[Exception]] = {
     ValueError,
     TypeError,
     KeyError,
@@ -88,12 +86,12 @@ class RetryPolicy:
     jitter_factor: float = 0.25
     """Fraction of computed delay to add as random jitter (reduces thundering herd)."""
 
-    retryable_errors: Set[Type[Exception]] = field(
+    retryable_errors: set[type[Exception]] = field(
         default_factory=lambda: set(_RETRYABLE_ERROR_TYPES)
     )
     """Exception classes that should trigger a retry (sub-classes match too)."""
 
-    critical_agent_types: Set[AgentType] = field(
+    critical_agent_types: set[AgentType] = field(
         default_factory=lambda: {AgentType.ARCHITECT, AgentType.INFRA}
     )
     """Agent types whose permanent failures trigger alerting."""
@@ -126,7 +124,7 @@ NO_RETRY_POLICY = RetryPolicy(
 )
 
 # Per-agent-type policy overrides
-_AGENT_POLICIES: Dict[AgentType, RetryPolicy] = {
+_AGENT_POLICIES: dict[AgentType, RetryPolicy] = {
     AgentType.ARCHITECT: AGGRESSIVE_RETRY_POLICY,
     AgentType.BACKEND: DEFAULT_RETRY_POLICY,
     AgentType.FRONTEND: DEFAULT_RETRY_POLICY,
@@ -163,7 +161,7 @@ def calculate_delay(attempt: int, policy: RetryPolicy) -> float:
     if attempt <= 0:
         attempt = 1
     exponent = attempt - 1
-    base_delay = policy.initial_delay_s * (policy.backoff_multiplier ** exponent)
+    base_delay = policy.initial_delay_s * (policy.backoff_multiplier**exponent)
     return min(base_delay, policy.max_delay_s)
 
 
@@ -204,7 +202,9 @@ class RetryManager:
 
     def _get_policy(self, task: TaskNode) -> RetryPolicy:
         """Return the retry policy for *task*'s agent type."""
-        agent_type = AgentType(task.agent_type) if isinstance(task.agent_type, str) else task.agent_type
+        agent_type = (
+            AgentType(task.agent_type) if isinstance(task.agent_type, str) else task.agent_type
+        )
         return _AGENT_POLICIES.get(agent_type, self._default_policy)
 
     # ------------------------------------------------------------------ #
@@ -259,8 +259,8 @@ class RetryManager:
         self,
         task: TaskNode,
         error: Exception,
-        graph_id: Optional[str] = None,
-        celery_app: Optional[Any] = None,
+        graph_id: str | None = None,
+        celery_app: Any | None = None,
     ) -> None:
         """Increment retry_count, compute delay, publish event, and re-enqueue.
 
@@ -354,8 +354,8 @@ class RetryManager:
         self,
         task: TaskNode,
         error: Exception,
-        graph_id: Optional[str] = None,
-        graph: Optional[Any] = None,  # TaskGraph — typed Any to avoid circular import
+        graph_id: str | None = None,
+        graph: Any | None = None,  # TaskGraph — typed Any to avoid circular import
     ) -> None:
         """Mark *task* as permanently FAILED and propagate to downstream tasks.
 
@@ -415,7 +415,9 @@ class RetryManager:
 
         # Alert for critical agents
         policy = self._get_policy(task)
-        agent_type = AgentType(task.agent_type) if isinstance(task.agent_type, str) else task.agent_type
+        agent_type = (
+            AgentType(task.agent_type) if isinstance(task.agent_type, str) else task.agent_type
+        )
         if agent_type in policy.critical_agent_types:
             await self._trigger_alert(task, error)
 
@@ -423,7 +425,7 @@ class RetryManager:
         self,
         failed_task: TaskNode,
         graph: Any,  # TaskGraph
-        graph_id: Optional[str],
+        graph_id: str | None,
     ) -> None:
         """Mark all tasks that depend (directly or transitively) on *failed_task* as BLOCKED."""
         # Collect all directly blocked task_ids
@@ -461,9 +463,7 @@ class RetryManager:
                         error_message=blocked_task.error_message,
                     )
                     try:
-                        await self._tge.update_task_status(
-                            graph_id, blocked_task.task_id, update
-                        )
+                        await self._tge.update_task_status(graph_id, blocked_task.task_id, update)
                     except OrchestrationError as exc:
                         logger.warning(
                             "blocked_task_persist_failed",
@@ -522,7 +522,7 @@ class RetryManager:
         if priority == Priority.CRITICAL:
             return TASK_QUEUE_PRIORITY
 
-        agent_queue_map: Dict[str, str] = {
+        agent_queue_map: dict[str, str] = {
             AgentType.ARCHITECT: "forge.agents.architect",
             AgentType.BACKEND: "forge.agents.backend",
             AgentType.FRONTEND: "forge.agents.frontend",
@@ -532,5 +532,7 @@ class RetryManager:
             AgentType.DOCS: "forge.agents.docs",
             AgentType.REFACTOR: "forge.agents.refactor",
         }
-        agent_type = AgentType(task.agent_type) if isinstance(task.agent_type, str) else task.agent_type
+        agent_type = (
+            AgentType(task.agent_type) if isinstance(task.agent_type, str) else task.agent_type
+        )
         return agent_queue_map.get(agent_type, TASK_QUEUE_DEFAULT)

@@ -8,7 +8,7 @@ is available in the runtime environment.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
@@ -36,7 +36,7 @@ class K8sManager:
 
     def __init__(
         self,
-        kubeconfig_path: Optional[str] = None,
+        kubeconfig_path: str | None = None,
         namespace: str = "default",
     ) -> None:
         self.default_namespace = namespace
@@ -90,8 +90,8 @@ class K8sManager:
     def apply_manifest(
         self,
         manifest_yaml: str,
-        namespace: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
         """Apply one or more Kubernetes manifests from a YAML string.
 
         Handles multiple documents in a single YAML stream.  Each document
@@ -107,7 +107,7 @@ class K8sManager:
         self._require_k8s()
 
         documents = list(yaml.safe_load_all(manifest_yaml))
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
 
         for doc in documents:
             if not doc:
@@ -126,14 +126,22 @@ class K8sManager:
                     name=name,
                     error=str(exc)[:200],
                 )
-                results.append({"kind": kind, "name": name, "namespace": ns, "status": "error", "error": str(exc)[:200]})
+                results.append(
+                    {
+                        "kind": kind,
+                        "name": name,
+                        "namespace": ns,
+                        "status": "error",
+                        "error": str(exc)[:200],
+                    }
+                )
 
-        logger.info("Manifests applied", count=len(results), namespace=namespace or self.default_namespace)
+        logger.info(
+            "Manifests applied", count=len(results), namespace=namespace or self.default_namespace
+        )
         return {"applied": results}
 
-    def _apply_single(
-        self, manifest: Dict[str, Any], kind: str, name: str, namespace: str
-    ) -> str:
+    def _apply_single(self, manifest: dict[str, Any], kind: str, name: str, namespace: str) -> str:
         """Dispatch a single manifest to the appropriate Kubernetes API."""
         from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
@@ -203,8 +211,8 @@ class K8sManager:
     def get_deployment_status(
         self,
         name: str,
-        namespace: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
         """Return current status for a Deployment.
 
         Args:
@@ -252,7 +260,7 @@ class K8sManager:
         self,
         name: str,
         replicas: int,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
     ) -> None:
         """Scale a Deployment to the specified replica count.
 
@@ -270,7 +278,7 @@ class K8sManager:
         )
         logger.info("Deployment scaled", name=name, namespace=ns, replicas=replicas)
 
-    def list_deployments(self, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_deployments(self, namespace: str | None = None) -> list[dict[str, Any]]:
         """List all Deployments in a namespace.
 
         Args:
@@ -298,7 +306,7 @@ class K8sManager:
     def restart_deployment(
         self,
         name: str,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
     ) -> None:
         """Trigger a rolling restart of a Deployment by patching its annotations.
 
@@ -330,7 +338,7 @@ class K8sManager:
         name: str,
         container_name: str,
         new_image: str,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
     ) -> None:
         """Update the container image for a specific container in a Deployment.
 
@@ -344,13 +352,7 @@ class K8sManager:
         ns = namespace or self.default_namespace
         patch = {
             "spec": {
-                "template": {
-                    "spec": {
-                        "containers": [
-                            {"name": container_name, "image": new_image}
-                        ]
-                    }
-                }
+                "template": {"spec": {"containers": [{"name": container_name, "image": new_image}]}}
             }
         }
         self.apps_v1.patch_namespaced_deployment(name=name, namespace=ns, body=patch)
@@ -368,9 +370,9 @@ class K8sManager:
 
     def list_pods(
         self,
-        namespace: Optional[str] = None,
-        label_selector: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        namespace: str | None = None,
+        label_selector: str | None = None,
+    ) -> list[dict[str, Any]]:
         """List Pods in a namespace.
 
         Args:
@@ -383,7 +385,7 @@ class K8sManager:
         """
         self._require_k8s()
         ns = namespace or self.default_namespace
-        kwargs: Dict[str, Any] = {"namespace": ns}
+        kwargs: dict[str, Any] = {"namespace": ns}
         if label_selector:
             kwargs["label_selector"] = label_selector
         pods = self.core_v1.list_namespaced_pod(**kwargs)
@@ -394,9 +396,7 @@ class K8sManager:
                 "status": p.status.phase if p.status else "Unknown",
                 "pod_ip": p.status.pod_ip if p.status else None,
                 "node": p.spec.node_name if p.spec else None,
-                "ready": all(
-                    c.ready for c in (p.status.container_statuses or [])
-                )
+                "ready": all(c.ready for c in (p.status.container_statuses or []))
                 if p.status and p.status.container_statuses
                 else False,
             }
@@ -406,8 +406,8 @@ class K8sManager:
     def get_pod_logs(
         self,
         name: str,
-        namespace: Optional[str] = None,
-        container: Optional[str] = None,
+        namespace: str | None = None,
+        container: str | None = None,
         tail_lines: int = 100,
         previous: bool = False,
     ) -> str:
@@ -425,7 +425,7 @@ class K8sManager:
         """
         self._require_k8s()
         ns = namespace or self.default_namespace
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "name": name,
             "namespace": ns,
             "tail_lines": tail_lines,
@@ -444,7 +444,7 @@ class K8sManager:
     def delete_pod(
         self,
         name: str,
-        namespace: Optional[str] = None,
+        namespace: str | None = None,
         grace_period_seconds: int = 0,
     ) -> None:
         """Delete a Pod (it will be recreated by the owning controller).
@@ -472,9 +472,9 @@ class K8sManager:
     def create_or_update_configmap(
         self,
         name: str,
-        data: Dict[str, str],
-        namespace: Optional[str] = None,
-        labels: Optional[Dict[str, str]] = None,
+        data: dict[str, str],
+        namespace: str | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create or update a ConfigMap.
 
@@ -512,10 +512,10 @@ class K8sManager:
     def create_or_update_secret(
         self,
         name: str,
-        string_data: Dict[str, str],
-        namespace: Optional[str] = None,
+        string_data: dict[str, str],
+        namespace: str | None = None,
         secret_type: str = "Opaque",
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create or update a Kubernetes Secret.
 
@@ -559,7 +559,7 @@ class K8sManager:
     def create_namespace(
         self,
         name: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create a Kubernetes namespace.
 
@@ -587,9 +587,11 @@ class K8sManager:
         except ApiException as exc:
             if exc.status == 409:
                 return "exists"
-            raise ToolError(f"Failed to create namespace '{name}': {exc}", "NAMESPACE_ERROR") from exc
+            raise ToolError(
+                f"Failed to create namespace '{name}': {exc}", "NAMESPACE_ERROR"
+            ) from exc
 
-    def list_namespaces(self) -> List[str]:
+    def list_namespaces(self) -> list[str]:
         """Return a list of all namespace names in the cluster."""
         self._require_k8s()
         ns_list = self.core_v1.list_namespace()
@@ -602,8 +604,8 @@ class K8sManager:
     def get_service(
         self,
         name: str,
-        namespace: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
         """Return details for a Kubernetes Service.
 
         Args:
@@ -640,7 +642,7 @@ class K8sManager:
             else [],
         }
 
-    def list_services(self, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_services(self, namespace: str | None = None) -> list[dict[str, Any]]:
         """List Services in a namespace.
 
         Args:
@@ -666,7 +668,7 @@ class K8sManager:
         """Return True if the Kubernetes API is reachable."""
         return self.available
 
-    def get_cluster_info(self) -> Dict[str, Any]:
+    def get_cluster_info(self) -> dict[str, Any]:
         """Return basic cluster-level information.
 
         Returns:

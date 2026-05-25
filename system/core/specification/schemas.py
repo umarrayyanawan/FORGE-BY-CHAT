@@ -7,13 +7,12 @@ planning begins.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field, field_validator
 
-from system.shared.models import BaseForgeModel, TimestampedModel
 from system.core.intent.schemas import ProjectIntent
-
+from system.shared.models import BaseForgeModel, TimestampedModel
 
 # ========================================================================== #
 # Database Schema
@@ -33,11 +32,11 @@ class DBField(BaseForgeModel):
     nullable: bool = Field(default=True, description="Whether the column allows NULL")
     unique: bool = Field(default=False, description="Whether a UNIQUE constraint is applied")
     indexed: bool = Field(default=False, description="Whether a single-column index is created")
-    foreign_key: Optional[str] = Field(
+    foreign_key: str | None = Field(
         default=None,
         description="Foreign key reference in 'table.column' form, e.g. 'users.id'",
     )
-    default: Optional[Any] = Field(
+    default: Any | None = Field(
         default=None,
         description="Default column value expressed as a Python literal or SQL expression string",
     )
@@ -54,9 +53,22 @@ class DBField(BaseForgeModel):
     @classmethod
     def type_must_be_known(cls, v: str) -> str:
         known = {
-            "string", "integer", "boolean", "datetime", "uuid",
-            "json", "array", "decimal", "text", "float", "bigint",
-            "smallint", "bytea", "timestamp", "date", "time",
+            "string",
+            "integer",
+            "boolean",
+            "datetime",
+            "uuid",
+            "json",
+            "array",
+            "decimal",
+            "text",
+            "float",
+            "bigint",
+            "smallint",
+            "bytea",
+            "timestamp",
+            "date",
+            "time",
         }
         lower = v.lower()
         if lower not in known:
@@ -70,9 +82,9 @@ class DBTable(BaseForgeModel):
     """Full table definition including columns and metadata."""
 
     name: str = Field(description="Table name in snake_case (plural preferred)")
-    fields: List[DBField] = Field(description="Ordered list of column definitions")
+    fields: list[DBField] = Field(description="Ordered list of column definitions")
     description: str = Field(default="", description="Purpose of this table")
-    indexes: List[str] = Field(
+    indexes: list[str] = Field(
         default_factory=list,
         description=(
             "Additional multi-column or partial index definitions in SQL notation, "
@@ -82,7 +94,7 @@ class DBTable(BaseForgeModel):
 
     @field_validator("fields")
     @classmethod
-    def must_have_id_field(cls, v: List[DBField]) -> List[DBField]:
+    def must_have_id_field(cls, v: list[DBField]) -> list[DBField]:
         names = [f.name for f in v]
         if "id" not in names:
             # Inject a UUID PK at the front
@@ -101,8 +113,8 @@ class DBTable(BaseForgeModel):
 class DBSchema(BaseForgeModel):
     """Complete normalised database schema for the project."""
 
-    tables: List[DBTable] = Field(description="All table definitions")
-    relationships: List[Dict[str, str]] = Field(
+    tables: list[DBTable] = Field(description="All table definitions")
+    relationships: list[dict[str, str]] = Field(
         default_factory=list,
         description=(
             "Entity-relationship descriptors: "
@@ -110,14 +122,14 @@ class DBSchema(BaseForgeModel):
         ),
     )
 
-    def get_table(self, name: str) -> Optional[DBTable]:
+    def get_table(self, name: str) -> DBTable | None:
         """Return a table by name, or None if not found."""
         for t in self.tables:
             if t.name == name:
                 return t
         return None
 
-    def table_names(self) -> List[str]:
+    def table_names(self) -> list[str]:
         return [t.name for t in self.tables]
 
 
@@ -132,11 +144,11 @@ class APIEndpoint(BaseForgeModel):
     path: str = Field(description="URL path, e.g. '/users/{user_id}'")
     method: str = Field(description="HTTP method: GET, POST, PUT, DELETE, PATCH")
     description: str = Field(description="What this endpoint does")
-    request_body: Optional[Dict[str, Any]] = Field(
+    request_body: dict[str, Any] | None = Field(
         default=None,
         description="JSON Schema of the request body (for POST/PUT/PATCH)",
     )
-    response_schema: Dict[str, Any] = Field(
+    response_schema: dict[str, Any] = Field(
         default_factory=dict,
         description="JSON Schema of the successful response payload",
     )
@@ -144,15 +156,15 @@ class APIEndpoint(BaseForgeModel):
         default=True,
         description="Whether the endpoint requires a valid JWT",
     )
-    roles: List[str] = Field(
+    roles: list[str] = Field(
         default_factory=list,
         description="Role names allowed to call this endpoint (empty = all authenticated)",
     )
-    rate_limit: Optional[str] = Field(
+    rate_limit: str | None = Field(
         default=None,
         description="Rate limit expression, e.g. '100/minute', '1000/hour'",
     )
-    query_params: List[Dict[str, str]] = Field(
+    query_params: list[dict[str, str]] = Field(
         default_factory=list,
         description="Supported query parameters [{name, type, required, description}]",
     )
@@ -172,17 +184,17 @@ class APIContract(BaseForgeModel):
 
     version: str = Field(default="v1", description="API version string")
     base_path: str = Field(default="/api/v1", description="Common path prefix")
-    endpoints: List[APIEndpoint] = Field(description="All API endpoints")
+    endpoints: list[APIEndpoint] = Field(description="All API endpoints")
     auth_scheme: str = Field(
         default="JWT",
         description="Authentication scheme: JWT, OAuth2, API_KEY, etc.",
     )
-    global_headers: Dict[str, str] = Field(
+    global_headers: dict[str, str] = Field(
         default_factory=dict,
         description="Headers required on all requests, e.g. {'X-Request-ID': 'string'}",
     )
 
-    def get_endpoints_for_path(self, path: str) -> List[APIEndpoint]:
+    def get_endpoints_for_path(self, path: str) -> list[APIEndpoint]:
         return [e for e in self.endpoints if e.path == path]
 
     def endpoint_count(self) -> int:
@@ -200,10 +212,10 @@ class UIPage(BaseForgeModel):
     name: str = Field(description="Human-readable page name, e.g. 'Dashboard'")
     route: str = Field(description="Client-side route path, e.g. '/dashboard'")
     description: str = Field(description="What the user can do on this page")
-    components: List[str] = Field(
+    components: list[str] = Field(
         description="UI component names rendered on this page, e.g. ['DataTable', 'StatsCard']"
     )
-    data_requirements: List[str] = Field(
+    data_requirements: list[str] = Field(
         description=(
             "API endpoints or data sources this page depends on, "
             "e.g. ['GET /api/v1/orders', 'WebSocket /ws/notifications']"
@@ -213,7 +225,7 @@ class UIPage(BaseForgeModel):
         default=True,
         description="Whether the user must be logged in to access this page",
     )
-    roles: List[str] = Field(
+    roles: list[str] = Field(
         default_factory=list,
         description="Roles that can see this page (empty = all authenticated)",
     )
@@ -222,19 +234,17 @@ class UIPage(BaseForgeModel):
 class UIStructure(BaseForgeModel):
     """Complete frontend UI architecture."""
 
-    pages: List[UIPage] = Field(description="All pages / views in the application")
-    global_components: List[str] = Field(
+    pages: list[UIPage] = Field(description="All pages / views in the application")
+    global_components: list[str] = Field(
         description="Components used across multiple pages, e.g. ['Navbar', 'Sidebar', 'Footer']"
     )
-    theme: Dict[str, str] = Field(
+    theme: dict[str, str] = Field(
         default_factory=dict,
         description="Design token overrides, e.g. {'primary': '#3B82F6', 'radius': '8px'}",
     )
-    navigation: List[Dict[str, str]] = Field(
+    navigation: list[dict[str, str]] = Field(
         default_factory=list,
-        description=(
-            "Navigation items: [{label, route, icon, role_required}]"
-        ),
+        description=("Navigation items: [{label, route, icon, role_required}]"),
     )
     state_management: str = Field(
         default="React Query + Zustand",
@@ -250,10 +260,10 @@ class UIStructure(BaseForgeModel):
 class PermissionMatrix(BaseForgeModel):
     """Role-based access control matrix for the project."""
 
-    roles: List[str] = Field(
+    roles: list[str] = Field(
         description="All role names in the system, e.g. ['admin', 'user', 'viewer']"
     )
-    permissions: Dict[str, List[str]] = Field(
+    permissions: dict[str, list[str]] = Field(
         description=(
             "Mapping of role name → list of permission strings, "
             "e.g. {'admin': ['users:read', 'users:write', 'users:delete']}"
@@ -263,7 +273,7 @@ class PermissionMatrix(BaseForgeModel):
     def role_has_permission(self, role: str, permission: str) -> bool:
         return permission in self.permissions.get(role, [])
 
-    def roles_with_permission(self, permission: str) -> List[str]:
+    def roles_with_permission(self, permission: str) -> list[str]:
         return [r for r, perms in self.permissions.items() if permission in perms]
 
 
@@ -276,9 +286,7 @@ class FeatureDependency(BaseForgeModel):
     """Directed dependency edge between two features."""
 
     feature: str = Field(description="The feature being described")
-    depends_on: List[str] = Field(
-        description="Features that must be built before this feature"
-    )
+    depends_on: list[str] = Field(description="Features that must be built before this feature")
     blocking: bool = Field(
         default=False,
         description=(
@@ -300,13 +308,12 @@ class FeatureDependency(BaseForgeModel):
 class ServiceTopology(BaseForgeModel):
     """High-level service decomposition of the system."""
 
-    services: List[Dict[str, Any]] = Field(
+    services: list[dict[str, Any]] = Field(
         description=(
-            "Service definitions: "
-            "[{name, type, description, port, dependencies, technology}]"
+            "Service definitions: [{name, type, description, port, dependencies, technology}]"
         )
     )
-    communication_patterns: List[Dict[str, str]] = Field(
+    communication_patterns: list[dict[str, str]] = Field(
         default_factory=list,
         description=(
             "Service-to-service communication: "
@@ -314,7 +321,7 @@ class ServiceTopology(BaseForgeModel):
         ),
     )
 
-    def service_names(self) -> List[str]:
+    def service_names(self) -> list[str]:
         return [s.get("name", "") for s in self.services]
 
 
@@ -338,10 +345,10 @@ class ProjectSpec(TimestampedModel):
     ui_structure: UIStructure = Field(description="Frontend page and component map")
     service_topology: ServiceTopology = Field(description="Service decomposition")
     permissions_matrix: PermissionMatrix = Field(description="RBAC matrix")
-    feature_dependency_map: List[FeatureDependency] = Field(
+    feature_dependency_map: list[FeatureDependency] = Field(
         description="Directed dependency graph for all features"
     )
-    tech_stack: Dict[str, str] = Field(
+    tech_stack: dict[str, str] = Field(
         description="Layer → technology mapping, e.g. {'backend': 'FastAPI + Python 3.12'}"
     )
     estimated_complexity: str = Field(
@@ -359,7 +366,7 @@ class ProjectSpec(TimestampedModel):
 
     def to_markdown(self) -> str:
         """Render a human-readable Markdown summary of this spec."""
-        lines: List[str] = [
+        lines: list[str] = [
             f"# Project Specification: {self.intent.raw_prompt[:80]}",
             "",
             f"**Project ID:** `{self.project_id}`",
@@ -388,8 +395,7 @@ class ProjectSpec(TimestampedModel):
             for field in table.fields:
                 fk = field.foreign_key or ""
                 lines.append(
-                    f"| {field.name} | {field.type} | {field.nullable} "
-                    f"| {field.unique} | {fk} |"
+                    f"| {field.name} | {field.type} | {field.nullable} | {field.unique} | {fk} |"
                 )
             lines.append("")
 
@@ -405,9 +411,7 @@ class ProjectSpec(TimestampedModel):
             "|--------|------|-------------|------|",
         ]
         for ep in self.api_contract.endpoints:
-            lines.append(
-                f"| {ep.method} | `{ep.path}` | {ep.description} | {ep.auth_required} |"
-            )
+            lines.append(f"| {ep.method} | `{ep.path}` | {ep.description} | {ep.auth_required} |")
 
         lines += [
             "",

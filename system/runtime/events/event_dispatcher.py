@@ -19,7 +19,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
-from typing import Callable, Dict, List
+from collections.abc import Callable
 
 from system.core.orchestration.event_schemas import ForgeEvent
 from system.observability.logging.logger import get_logger
@@ -41,8 +41,8 @@ class EventDispatcher:
     """
 
     def __init__(self) -> None:
-        self._handlers: Dict[str, List[Callable]] = {}
-        self._global_handlers: List[Callable] = []
+        self._handlers: dict[str, list[Callable]] = {}
+        self._global_handlers: list[Callable] = []
 
     # ------------------------------------------------------------------
     # Registration
@@ -152,7 +152,7 @@ class EventDispatcher:
             handler_count=len(all_handlers),
         )
 
-    async def dispatch_batch(self, events: List[ForgeEvent]) -> None:
+    async def dispatch_batch(self, events: list[ForgeEvent]) -> None:
         """Dispatch a list of events sequentially.
 
         Events are dispatched in order.  Each event's handlers are run
@@ -176,7 +176,7 @@ class EventDispatcher:
         """Return the number of global handlers."""
         return len(self._global_handlers)
 
-    def registered_event_types(self) -> List[str]:
+    def registered_event_types(self) -> list[str]:
         """Return all event types that have at least one handler."""
         return [k for k, v in self._handlers.items() if v]
 

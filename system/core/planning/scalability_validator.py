@@ -19,13 +19,10 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 from system.core.planning.schemas import (
     ArchitecturePlan,
-    InfrastructurePlan,
     RepoTopology,
-    ScalabilityProfile,
 )
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
@@ -43,8 +40,8 @@ class ValidationResult:
     """Result of a scalability validation run."""
 
     is_valid: bool
-    issues: List[str] = field(default_factory=list)
-    recommendations: List[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
     def add_issue(self, msg: str) -> None:
         self.issues.append(msg)
@@ -120,9 +117,7 @@ class ScalabilityValidator:
     # Check: single points of failure
     # ------------------------------------------------------------------
 
-    def check_single_points_of_failure(
-        self, topology: RepoTopology
-    ) -> List[str]:
+    def check_single_points_of_failure(self, topology: RepoTopology) -> list[str]:
         """Flag any service with replicas=1 that has no failover configured.
 
         A service is considered a SPOF when:
@@ -132,7 +127,7 @@ class ScalabilityValidator:
 
         Returns a list of human-readable issue strings.
         """
-        issues: List[str] = []
+        issues: list[str] = []
         for svc in topology.services:
             scaling = svc.scaling or {}
             min_replicas = scaling.get("min_replicas", 1)
@@ -154,28 +149,22 @@ class ScalabilityValidator:
     # Check: database scaling
     # ------------------------------------------------------------------
 
-    def check_database_scaling(
-        self, spec: ProjectSpec, plan: ArchitecturePlan
-    ) -> List[str]:
+    def check_database_scaling(self, spec: ProjectSpec, plan: ArchitecturePlan) -> list[str]:
         """Warn when no read replicas are configured but scale is high.
 
         Issues a blocking issue when the spec mentions 'million' users / records
         and the database component / service has no read replica configuration.
         """
-        issues: List[str] = []
+        issues: list[str] = []
         scale_text = (spec.intent.scale_requirements or "").lower()
 
         if "million" not in scale_text and "10m" not in scale_text:
             return issues  # scale is not extreme — no issue
 
         # Check infra_components for read replica mention
-        db_components = [
-            c for c in plan.infra_components
-            if c.component_type == "database"
-        ]
+        db_components = [c for c in plan.infra_components if c.component_type == "database"]
         has_read_replica = any(
-            "replica" in c.config.get("notes", "").lower()
-            or c.config.get("read_replicas", 0) > 0
+            "replica" in c.config.get("notes", "").lower() or c.config.get("read_replicas", 0) > 0
             for c in db_components
         )
 
@@ -199,7 +188,7 @@ class ScalabilityValidator:
     # Check: stateless services
     # ------------------------------------------------------------------
 
-    def check_stateless_services(self, topology: RepoTopology) -> List[str]:
+    def check_stateless_services(self, topology: RepoTopology) -> list[str]:
         """Flag backend/worker services that appear to store session state in memory.
 
         Heuristics:
@@ -208,10 +197,8 @@ class ScalabilityValidator:
 
         Returns issue strings for services that are not horizontally scalable.
         """
-        issues: List[str] = []
-        cache_names = {
-            s.name for s in topology.services if s.service_type == "cache"
-        }
+        issues: list[str] = []
+        cache_names = {s.name for s in topology.services if s.service_type == "cache"}
 
         for svc in topology.services:
             if svc.service_type not in {"backend", "worker"}:
@@ -248,12 +235,12 @@ class ScalabilityValidator:
     # Check: caching strategy
     # ------------------------------------------------------------------
 
-    def check_caching_strategy(self, plan: ArchitecturePlan) -> List[str]:
+    def check_caching_strategy(self, plan: ArchitecturePlan) -> list[str]:
         """Warn when there is no Redis cache but the scale is high.
 
         Returns advisory warning strings (not blocking issues).
         """
-        warnings: List[str] = []
+        warnings: list[str] = []
 
         # Detect high-scale from infra components or services
         infra_names = [c.technology.lower() for c in plan.infra_components]

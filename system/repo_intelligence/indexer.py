@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import List
 
 from system.observability.logging.logger import get_logger
 from system.repo_intelligence.ast.parser import ASTParser
@@ -23,8 +22,16 @@ logger = get_logger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx"}
 _SKIP_DIRS = {
-    ".git", "__pycache__", "node_modules", ".venv", "venv",
-    ".mypy_cache", ".pytest_cache", "dist", "build", ".next",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".next",
 }
 
 
@@ -76,9 +83,9 @@ class RepoIndexer:
             )
 
         t_start = time.monotonic()
-        errors: List[str] = []
+        errors: list[str] = []
         all_files = self._collect_files(root_path)
-        all_chunks: List[CodeChunk] = []
+        all_chunks: list[CodeChunk] = []
 
         logger.info(
             "RepoIndexer: indexing project=%s root=%s files=%d",
@@ -106,9 +113,7 @@ class RepoIndexer:
 
         # ---- Phase 2: Embed ----
         try:
-            embeddings = await self._embedder.embed_chunks_batch(
-                all_chunks, batch_size=100
-            )
+            embeddings = await self._embedder.embed_chunks_batch(all_chunks, batch_size=100)
             for chunk, emb in zip(all_chunks, embeddings):
                 chunk.embedding = emb
                 await self._embedder.upsert_embedding(chunk)
@@ -155,9 +160,7 @@ class RepoIndexer:
     # Incremental update
     # ------------------------------------------------------------------
 
-    async def update_index(
-        self, project_id: str, changed_files: List[str]
-    ) -> None:
+    async def update_index(self, project_id: str, changed_files: list[str]) -> None:
         """Incrementally re-index only the changed files.
 
         Removes stale embeddings and chunk nodes for each file, then
@@ -225,9 +228,9 @@ class RepoIndexer:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _collect_files(self, root_path: str) -> List[str]:
+    def _collect_files(self, root_path: str) -> list[str]:
         """Recursively collect all supported source files under *root_path*."""
-        files: List[str] = []
+        files: list[str] = []
         for dirpath, dirnames, filenames in os.walk(root_path):
             dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
             for fname in filenames:

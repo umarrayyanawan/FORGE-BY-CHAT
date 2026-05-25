@@ -11,9 +11,9 @@ from typing import Any
 
 from system.core.intent.schemas import ProjectIntent
 from system.observability.logging.logger import get_logger
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import SpecificationError
 from system.shared.llm_client import LLMMessage, get_llm_client
-from system.shared.constants import DEFAULT_LLM_MODEL
 
 logger = get_logger(__name__)
 
@@ -132,8 +132,7 @@ class PRDGenerator:
         integrations_md = "\n".join(f"- {i}" for i in intent.integrations) or "- None specified"
         constraints_md = "\n".join(f"- {c}" for c in intent.constraints) or "- None specified"
         security_md = (
-            "\n".join(f"- {s}" for s in intent.security_requirements)
-            or "- Standard best practices"
+            "\n".join(f"- {s}" for s in intent.security_requirements) or "- Standard best practices"
         )
         tech_prefs = (
             "\n".join(f"- {k}: {v}" for k, v in intent.tech_preferences.items())

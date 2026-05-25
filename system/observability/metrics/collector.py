@@ -25,17 +25,15 @@ Expose the endpoint (add to FastAPI app)::
 
 from __future__ import annotations
 
-import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
+import time
 
 from prometheus_client import (
-    CONTENT_TYPE_LATEST,
     CollectorRegistry,
     Counter,
     Gauge,
     Histogram,
-    generate_latest,
     make_asgi_app,
 )
 

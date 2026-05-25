@@ -9,7 +9,7 @@ Tags:   orchestration
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field
@@ -71,18 +71,18 @@ class SummaryResponse(BaseForgeModel):
     project_id: str
     phase: str
     is_paused: bool
-    active_tasks: List[str]
-    completed_tasks: List[str]
-    failed_tasks: List[str]
-    blocked_tasks: List[str]
-    percent_complete: Optional[float] = None
+    active_tasks: list[str]
+    completed_tasks: list[str]
+    failed_tasks: list[str]
+    blocked_tasks: list[str]
+    percent_complete: float | None = None
 
 
 class EventListResponse(BaseForgeModel):
     """List of recent events for a project."""
 
     project_id: str
-    events: List[Dict[str, Any]]
+    events: list[dict[str, Any]]
     count: int
 
 
@@ -220,7 +220,7 @@ async def get_progress(
     """Return execution progress for *project_id*."""
     logger.info("GET /orchestration/{project_id}/progress", project_id=project_id)
     state = await state_mgr.get_state(project_id)
-    graph_id: Optional[str] = state.metadata.get("graph_id")
+    graph_id: str | None = state.metadata.get("graph_id")
 
     if not graph_id:
         raise HTTPException(
@@ -265,9 +265,7 @@ async def get_events(
     """Return recent events from the event bus history for *project_id*."""
     logger.info("GET /orchestration/{project_id}/events", project_id=project_id)
     try:
-        raw_events: List[ForgeEvent] = await event_bus.get_event_history(
-            project_id, limit=limit
-        )
+        raw_events: list[ForgeEvent] = await event_bus.get_event_history(project_id, limit=limit)
         events_list = [e.model_dump() for e in raw_events]
     except Exception as exc:
         logger.error(

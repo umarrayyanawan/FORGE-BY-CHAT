@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
 import uuid
-from typing import Any, Dict, Optional
 
 from system.core.deployment.schemas import DeploymentConfig
 from system.observability.logging.logger import get_logger
@@ -25,9 +25,9 @@ class InfraProvisioner:
 
     def __init__(
         self,
-        terminal_executor: Optional[Any] = None,
-        k8s_manager: Optional[Any] = None,
-        docker_manager: Optional[Any] = None,
+        terminal_executor: Any | None = None,
+        k8s_manager: Any | None = None,
+        docker_manager: Any | None = None,
     ) -> None:
         self.terminal = terminal_executor
         self.k8s = k8s_manager
@@ -72,7 +72,7 @@ class InfraProvisioner:
         logger.info("Deprovisioning resources", deployment_id=deployment_id)
         # Production: look up target from DB and invoke the appropriate teardown.
 
-    async def update_env_vars(self, deployment_id: str, env_vars: Dict[str, str]) -> None:
+    async def update_env_vars(self, deployment_id: str, env_vars: dict[str, str]) -> None:
         """Push updated environment variables to a running deployment."""
         logger.info(
             "Updating environment variables",
@@ -204,8 +204,7 @@ class InfraProvisioner:
     def _generate_k8s_manifest(self, config: DeploymentConfig) -> str:
         """Generate a production-ready Kubernetes Deployment + Service manifest."""
         env_block = "\n".join(
-            f"        - name: {k}\n          value: \"{v}\""
-            for k, v in config.env_vars.items()
+            f'        - name: {k}\n          value: "{v}"' for k, v in config.env_vars.items()
         )
         secret_env_block = "\n".join(
             f"        - name: {ref.upper()}\n"

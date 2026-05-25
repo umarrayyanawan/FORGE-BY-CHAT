@@ -1,11 +1,11 @@
 """Self-healing engine — attempts to auto-fix common validation failures."""
+
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
-from system.core.verification.schemas import SelfHealingAttempt, ValidationCheck, ValidationStatus
+from system.core.verification.schemas import SelfHealingAttempt, ValidationCheck
 from system.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -87,15 +87,17 @@ class SelfHealingEngine:
         try:
             details_str = str(check.details)[:500]
             response = await self.llm_client.complete(
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Fix this validation error: {check.check_name}\n"
-                        f"Details: {details_str}\n"
-                        f"Message: {check.message}\n\n"
-                        "Provide specific file edits in ### FILE: format."
-                    ),
-                }],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Fix this validation error: {check.check_name}\n"
+                            f"Details: {details_str}\n"
+                            f"Message: {check.message}\n\n"
+                            "Provide specific file edits in ### FILE: format."
+                        ),
+                    }
+                ],
                 system="You are an expert Python developer. Fix the exact validation error described.",
                 max_tokens=1024,
                 temperature=0.0,

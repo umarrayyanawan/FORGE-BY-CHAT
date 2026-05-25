@@ -1,7 +1,8 @@
 """FastAPI router for Evolution Engine endpoints."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/evolution", tags=["evolution"])
 
 def _get_engine() -> Any:
     from system.core.evolution.engine import EvolutionEngine
+
     return EvolutionEngine()
 
 
@@ -42,7 +44,7 @@ async def get_evolution(evolution_id: str):
     return record
 
 
-@router.get("/project/{project_id}", response_model=List[EvolutionRecord])
+@router.get("/project/{project_id}", response_model=list[EvolutionRecord])
 async def list_evolutions(project_id: str):
     """List all evolution records for a project."""
     engine = _get_engine()
@@ -50,7 +52,7 @@ async def list_evolutions(project_id: str):
 
 
 @router.get("/project/{project_id}/opportunities")
-async def get_opportunities(project_id: str) -> Dict[str, Any]:
+async def get_opportunities(project_id: str) -> dict[str, Any]:
     """Get improvement opportunities for a project."""
     engine = _get_engine()
     opportunities = await engine.find_improvement_opportunities(project_id)

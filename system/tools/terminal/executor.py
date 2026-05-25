@@ -9,12 +9,11 @@ linters, and build tools inside project workspaces.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import os
+from pathlib import Path
 import shlex
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional
 
 from system.observability.logging.logger import get_logger
 from system.shared.exceptions import ToolError
@@ -25,7 +24,7 @@ logger = get_logger(__name__)
 # Security policy
 # --------------------------------------------------------------------------- #
 
-BLOCKED_COMMANDS: List[str] = [
+BLOCKED_COMMANDS: list[str] = [
     "rm -rf /",
     "sudo rm -rf",
     ":(){:|:&};:",  # fork bomb
@@ -46,7 +45,7 @@ BLOCKED_COMMANDS: List[str] = [
     "wipe",
 ]
 
-ALLOWED_COMMANDS: List[str] = [
+ALLOWED_COMMANDS: list[str] = [
     "python",
     "python3",
     "pip",
@@ -202,7 +201,7 @@ class TerminalExecutor:
 
         return True
 
-    def _resolve_cwd(self, cwd: Optional[str]) -> str:
+    def _resolve_cwd(self, cwd: str | None) -> str:
         """Resolve a working directory relative to the workspace root."""
         if cwd is None:
             return str(self.workspace_root)
@@ -218,9 +217,9 @@ class TerminalExecutor:
     async def run(
         self,
         command: str,
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
         timeout: int = 300,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
         inherit_env: bool = True,
     ) -> ExecutionOutput:
         """Execute a shell command asynchronously.
@@ -243,7 +242,7 @@ class TerminalExecutor:
         work_dir = self._resolve_cwd(cwd)
 
         # Build environment
-        exec_env: Optional[Dict[str, str]] = None
+        exec_env: dict[str, str] | None = None
         if env:
             if inherit_env:
                 exec_env = {**os.environ, **env}
@@ -267,7 +266,7 @@ class TerminalExecutor:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(), timeout=float(timeout)
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             try:
                 proc.kill()
@@ -315,9 +314,9 @@ class TerminalExecutor:
     async def run_in_sandbox(
         self,
         command: str,
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
         timeout: int = 300,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ) -> ExecutionOutput:
         """Run a command only if it passes the sandbox allow-list policy.
 
@@ -485,8 +484,8 @@ class TerminalExecutor:
         self,
         url: str,
         dest: str,
-        branch: Optional[str] = None,
-        depth: Optional[int] = None,
+        branch: str | None = None,
+        depth: int | None = None,
         timeout: int = 300,
     ) -> ExecutionOutput:
         """Clone a git repository.
@@ -534,7 +533,7 @@ class TerminalExecutor:
     async def docker_compose_up(
         self,
         compose_file: str = "docker-compose.yml",
-        services: Optional[List[str]] = None,
+        services: list[str] | None = None,
         env_file: str = ".env",
         cwd: str = ".",
         timeout: int = 300,

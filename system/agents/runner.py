@@ -15,7 +15,6 @@ responsibility of the Orchestrator layer above this module.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from system.agents.base import AgentContext, AgentResult
 from system.agents.registry import AgentRegistry
@@ -67,8 +66,8 @@ class AgentRunner:
     async def run_task(
         self,
         task: TaskNode,
-        spec: Optional[ProjectSpec] = None,
-        arch: Optional[ArchitecturePlan] = None,
+        spec: ProjectSpec | None = None,
+        arch: ArchitecturePlan | None = None,
     ) -> AgentResult:
         """Execute the appropriate specialist agent for the given task.
 

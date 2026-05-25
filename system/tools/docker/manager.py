@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.observability.logging.logger import get_logger
 from system.shared.exceptions import ToolError
@@ -46,7 +46,7 @@ class ImageBuildResult:
     tag: str
     build_log: str
     succeeded: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -57,8 +57,8 @@ class ContainerInfo:
     name: str
     status: str
     image: str
-    labels: Dict[str, str] = field(default_factory=dict)
-    ports: Dict[str, Any] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
+    ports: dict[str, Any] = field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------- #
@@ -109,10 +109,10 @@ class DockerManager:
         self,
         dockerfile_path: str,
         tag: str,
-        build_args: Optional[Dict[str, str]] = None,
-        target: Optional[str] = None,
+        build_args: dict[str, str] | None = None,
+        target: str | None = None,
         no_cache: bool = False,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> ImageBuildResult:
         """Build a Docker image from a Dockerfile.
 
@@ -137,7 +137,7 @@ class DockerManager:
         build_context = str(dockerfile.parent)
         dockerfile_name = dockerfile.name
 
-        build_log_lines: List[str] = []
+        build_log_lines: list[str] = []
         try:
             image, logs = self.client.images.build(
                 path=build_context,
@@ -217,7 +217,7 @@ class DockerManager:
         except docker.errors.APIError as exc:
             raise ToolError(f"Failed to remove image '{image}': {exc}", "REMOVE_ERROR") from exc
 
-    def list_images(self, name: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_images(self, name: str | None = None) -> list[dict[str, Any]]:
         """List local Docker images.
 
         Args:
@@ -246,16 +246,16 @@ class DockerManager:
     def run_container(
         self,
         image: str,
-        command: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        volumes: Optional[Dict[str, Dict[str, str]]] = None,
-        network: Optional[str] = None,
-        user: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        mem_limit: Optional[str] = None,
-        cpu_quota: Optional[int] = None,
+        command: str | None = None,
+        env: dict[str, str] | None = None,
+        volumes: dict[str, dict[str, str]] | None = None,
+        network: str | None = None,
+        user: str | None = None,
+        working_dir: str | None = None,
+        mem_limit: str | None = None,
+        cpu_quota: int | None = None,
         read_only: bool = False,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
         remove_on_exit: bool = True,
     ) -> ContainerResult:
         """Run a command inside a container and wait for it to finish.
@@ -284,7 +284,7 @@ class DockerManager:
         self._require_client()
         import docker  # type: ignore[import-untyped]
 
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "image": image,
             "command": command,
             "environment": env or {},
@@ -349,14 +349,14 @@ class DockerManager:
     def run_detached(
         self,
         image: str,
-        command: Optional[str] = None,
-        name: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        volumes: Optional[Dict[str, Dict[str, str]]] = None,
-        network: Optional[str] = None,
-        ports: Optional[Dict[str, Any]] = None,
-        restart_policy: Optional[Dict[str, Any]] = None,
-        labels: Optional[Dict[str, str]] = None,
+        command: str | None = None,
+        name: str | None = None,
+        env: dict[str, str] | None = None,
+        volumes: dict[str, dict[str, str]] | None = None,
+        network: str | None = None,
+        ports: dict[str, Any] | None = None,
+        restart_policy: dict[str, Any] | None = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Start a container in the background and return its ID.
 
@@ -377,7 +377,7 @@ class DockerManager:
         self._require_client()
         import docker  # type: ignore[import-untyped]
 
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "image": image,
             "command": command,
             "environment": env or {},
@@ -409,9 +409,9 @@ class DockerManager:
     def list_containers(
         self,
         all_containers: bool = False,
-        filter_label: Optional[str] = None,
-        filter_name: Optional[str] = None,
-    ) -> List[ContainerInfo]:
+        filter_label: str | None = None,
+        filter_name: str | None = None,
+    ) -> list[ContainerInfo]:
         """List containers visible to the Docker daemon.
 
         Args:
@@ -423,7 +423,7 @@ class DockerManager:
             List of :class:`ContainerInfo` objects.
         """
         self._require_client()
-        filters: Dict[str, Any] = {}
+        filters: dict[str, Any] = {}
         if filter_label:
             filters["label"] = filter_label
         if filter_name:
@@ -527,7 +527,7 @@ class DockerManager:
         container_id: str,
         tail: int = 100,
         follow: bool = False,
-        since: Optional[int] = None,
+        since: int | None = None,
         timestamps: bool = False,
     ) -> str:
         """Fetch log output from a container.
@@ -547,7 +547,7 @@ class DockerManager:
 
         try:
             container = self.client.containers.get(container_id)
-            kwargs: Dict[str, Any] = {
+            kwargs: dict[str, Any] = {
                 "stdout": True,
                 "stderr": True,
                 "tail": tail,
@@ -570,9 +570,9 @@ class DockerManager:
         self,
         container_id: str,
         command: str,
-        user: Optional[str] = None,
-        workdir: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
+        user: str | None = None,
+        workdir: str | None = None,
+        env: dict[str, str] | None = None,
     ) -> ContainerResult:
         """Execute a command inside a running container.
 
@@ -591,7 +591,7 @@ class DockerManager:
 
         try:
             container = self.client.containers.get(container_id)
-            kwargs: Dict[str, Any] = {"stdout": True, "stderr": True, "demux": False}
+            kwargs: dict[str, Any] = {"stdout": True, "stderr": True, "demux": False}
             if user:
                 kwargs["user"] = user
             if workdir:
@@ -623,8 +623,8 @@ class DockerManager:
         self,
         project_dir: str,
         compose_file: str = "docker-compose.yml",
-        services: Optional[List[str]] = None,
-        env_file: Optional[str] = None,
+        services: list[str] | None = None,
+        env_file: str | None = None,
         build: bool = False,
         detach: bool = True,
     ) -> ContainerResult:
@@ -685,7 +685,7 @@ class DockerManager:
         self,
         name: str,
         driver: str = "bridge",
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create a Docker network.
 
@@ -732,7 +732,7 @@ class DockerManager:
     def create_volume(
         self,
         name: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> str:
         """Create a named Docker volume.
 
@@ -770,7 +770,7 @@ class DockerManager:
     # System
     # ------------------------------------------------------------------ #
 
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Return Docker daemon system information."""
         self._require_client()
         info = self.client.info()
@@ -784,7 +784,7 @@ class DockerManager:
             "images": info.get("Images", 0),
         }
 
-    def prune_stopped_containers(self) -> Dict[str, Any]:
+    def prune_stopped_containers(self) -> dict[str, Any]:
         """Remove all stopped containers and return reclaimed space."""
         self._require_client()
         result = self.client.containers.prune()

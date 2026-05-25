@@ -1,8 +1,9 @@
 """Regression guard — ensures changes don't break existing functionality."""
+
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.core.evolution.schemas import PatchPlan
 from system.observability.logging.logger import get_logger
@@ -14,10 +15,8 @@ class RegressionGuard:
     def __init__(self, terminal_executor: Any = None) -> None:
         self.terminal = terminal_executor
 
-    async def run_regression_suite(
-        self, plan: PatchPlan, project_path: str
-    ) -> Dict[str, Any]:
-        results: Dict[str, Any] = {
+    async def run_regression_suite(self, plan: PatchPlan, project_path: str) -> dict[str, Any]:
+        results: dict[str, Any] = {
             "plan_id": plan.plan_id,
             "passed": False,
             "checks": [],
@@ -40,7 +39,7 @@ class RegressionGuard:
         results["passed"] = len(results["failures"]) == 0
         return results
 
-    async def _run_tests(self, project_path: str) -> Dict[str, Any]:
+    async def _run_tests(self, project_path: str) -> dict[str, Any]:
         if self.terminal:
             try:
                 result = await self.terminal.run_tests(project_path)
@@ -49,7 +48,7 @@ class RegressionGuard:
                 return {"name": "pytest", "passed": False, "error": str(exc)}
         return {"name": "pytest", "passed": True, "output": "skipped (no executor)"}
 
-    async def _run_lint(self, project_path: str) -> Dict[str, Any]:
+    async def _run_lint(self, project_path: str) -> dict[str, Any]:
         if self.terminal:
             try:
                 result = await self.terminal.run_lint(project_path)
@@ -59,7 +58,7 @@ class RegressionGuard:
         return {"name": "lint", "passed": True, "output": "skipped (no executor)"}
 
     async def validate_no_api_breakage(
-        self, plan: PatchPlan, expected_contracts: Optional[List[Dict]] = None
+        self, plan: PatchPlan, expected_contracts: list[dict] | None = None
     ) -> bool:
         if not expected_contracts:
             return True

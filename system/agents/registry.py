@@ -20,16 +20,15 @@ Usage::
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Type
+from dataclasses import dataclass
 
+from system.agents.base import BaseAgent
+from system.core.orchestration.task_schemas import TaskNode
 from system.observability.logging.logger import get_logger
 from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import AgentError
-from system.shared.models import AgentType, ExecutionPhase
 from system.shared.llm_client import get_llm_client
-from system.core.orchestration.task_schemas import TaskNode
-from system.agents.base import BaseAgent
+from system.shared.models import AgentType, ExecutionPhase
 
 logger = get_logger("agent.registry")
 
@@ -67,8 +66,8 @@ class AgentCapabilities:
 
     agent_type: AgentType
     description: str
-    allowed_phases: List[ExecutionPhase]
-    typical_tasks: List[str]
+    allowed_phases: list[ExecutionPhase]
+    typical_tasks: list[str]
     primary_language: str = "python"
     can_read_only: bool = False
     max_concurrent: int = 3
@@ -78,7 +77,7 @@ class AgentCapabilities:
 # Capability Catalogue
 # ============================================================================ #
 
-AGENT_CAPABILITIES: Dict[AgentType, AgentCapabilities] = {
+AGENT_CAPABILITIES: dict[AgentType, AgentCapabilities] = {
     AgentType.ARCHITECT: AgentCapabilities(
         agent_type=AgentType.ARCHITECT,
         description=(
@@ -88,7 +87,9 @@ AGENT_CAPABILITIES: Dict[AgentType, AgentCapabilities] = {
         allowed_phases=[
             ExecutionPhase.ARCHITECTURE,
             ExecutionPhase.SPECIFICATION,
-            ExecutionPhase.PLANNING if hasattr(ExecutionPhase, "PLANNING") else ExecutionPhase.TASK_GRAPH,
+            ExecutionPhase.PLANNING
+            if hasattr(ExecutionPhase, "PLANNING")
+            else ExecutionPhase.TASK_GRAPH,
         ],
         typical_tasks=[
             "design service topology",
@@ -165,8 +166,7 @@ AGENT_CAPABILITIES: Dict[AgentType, AgentCapabilities] = {
     AgentType.INFRA: AgentCapabilities(
         agent_type=AgentType.INFRA,
         description=(
-            "Writes Docker, Kubernetes, Terraform, and GitHub Actions CI/CD "
-            "infrastructure-as-code."
+            "Writes Docker, Kubernetes, Terraform, and GitHub Actions CI/CD infrastructure-as-code."
         ),
         allowed_phases=[
             ExecutionPhase.EXECUTION,
@@ -322,9 +322,9 @@ class AgentRegistry:
     production — do all registrations before serving requests.
     """
 
-    _instance: Optional["AgentRegistry"] = None
+    _instance: AgentRegistry | None = None
 
-    def __new__(cls) -> "AgentRegistry":
+    def __new__(cls) -> AgentRegistry:
         """Enforce singleton pattern."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -335,9 +335,9 @@ class AgentRegistry:
         """Initialise the registry (called once due to singleton pattern)."""
         if getattr(self, "_initialised", False):
             return
-        self._registry: Dict[AgentType, Type[BaseAgent]] = {}
-        self._capabilities: Dict[AgentType, AgentCapabilities] = dict(AGENT_CAPABILITIES)
-        self._llm_client: Optional[object] = None
+        self._registry: dict[AgentType, type[BaseAgent]] = {}
+        self._capabilities: dict[AgentType, AgentCapabilities] = dict(AGENT_CAPABILITIES)
+        self._llm_client: object | None = None
         self._initialised = True
         logger.info("agent_registry_initialised")
 
@@ -348,8 +348,8 @@ class AgentRegistry:
     def register(
         self,
         agent_type: AgentType,
-        agent_class: Type[BaseAgent],
-        capabilities: Optional[AgentCapabilities] = None,
+        agent_class: type[BaseAgent],
+        capabilities: AgentCapabilities | None = None,
     ) -> None:
         """Register an agent class for a given agent type.
 
@@ -369,9 +369,7 @@ class AgentRegistry:
             If ``agent_class`` is not a subclass of ``BaseAgent``.
         """
         if not (isinstance(agent_class, type) and issubclass(agent_class, BaseAgent)):
-            raise TypeError(
-                f"agent_class must be a subclass of BaseAgent, got {agent_class!r}"
-            )
+            raise TypeError(f"agent_class must be a subclass of BaseAgent, got {agent_class!r}")
         self._registry[agent_type] = agent_class
         if capabilities is not None:
             self._capabilities[agent_type] = capabilities
@@ -444,7 +442,7 @@ class AgentRegistry:
     # Introspection
     # ---------------------------------------------------------------------- #
 
-    def list_agents(self) -> List[AgentType]:
+    def list_agents(self) -> list[AgentType]:
         """Return all registered agent types.
 
         Returns
@@ -454,7 +452,7 @@ class AgentRegistry:
         """
         return sorted(self._registry.keys(), key=lambda t: t.value)
 
-    def get_capabilities(self, agent_type: AgentType) -> Optional[AgentCapabilities]:
+    def get_capabilities(self, agent_type: AgentType) -> AgentCapabilities | None:
         """Return capability metadata for an agent type.
 
         Parameters
@@ -469,7 +467,7 @@ class AgentRegistry:
         """
         return self._capabilities.get(agent_type)
 
-    def all_capabilities(self) -> List[AgentCapabilities]:
+    def all_capabilities(self) -> list[AgentCapabilities]:
         """Return capability records for all registered agent types.
 
         Returns
@@ -506,7 +504,7 @@ class AgentRegistry:
 
 def get_agent_for_task(
     task: TaskNode,
-    registry: Optional[AgentRegistry] = None,
+    registry: AgentRegistry | None = None,
 ) -> BaseAgent:
     """Select and instantiate the most appropriate agent for a task.
 
@@ -561,6 +559,7 @@ def get_agent_for_task(
 # Module-level default registry — all 8 agents pre-registered
 # ============================================================================ #
 
+
 def _build_default_registry() -> AgentRegistry:
     """Build and return the default registry with all agents registered.
 
@@ -578,12 +577,12 @@ def _build_default_registry() -> AgentRegistry:
     # Deferred imports to break circular dependency
     from system.agents.architect.agent import ArchitectAgent
     from system.agents.backend.agent import BackendAgent
+    from system.agents.docs.agent import DocsAgent
     from system.agents.frontend.agent import FrontendAgent
     from system.agents.infra.agent import InfraAgent
     from system.agents.qa.agent import QAAgent
-    from system.agents.security.agent import SecurityAgent
-    from system.agents.docs.agent import DocsAgent
     from system.agents.refactor.agent import RefactorAgent
+    from system.agents.security.agent import SecurityAgent
 
     reg.register(AgentType.ARCHITECT, ArchitectAgent)
     reg.register(AgentType.BACKEND, BackendAgent)
@@ -603,7 +602,7 @@ def _build_default_registry() -> AgentRegistry:
 
 
 # Lazily initialised default registry
-_default_registry_instance: Optional[AgentRegistry] = None
+_default_registry_instance: AgentRegistry | None = None
 
 
 def _get_default_registry() -> AgentRegistry:

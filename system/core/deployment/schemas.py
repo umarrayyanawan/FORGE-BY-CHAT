@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
+import uuid
 
 from pydantic import Field
 
@@ -19,8 +19,8 @@ class DeploymentConfig(BaseForgeModel):
     project_id: str
     image_tag: str = "latest"
     replicas: int = 1
-    env_vars: Dict[str, str] = {}
-    secret_refs: List[str] = []
+    env_vars: dict[str, str] = {}
+    secret_refs: list[str] = []
     health_check_path: str = "/health"
     health_check_timeout: int = 30
     rollout_strategy: str = "rolling"
@@ -35,9 +35,9 @@ class DeploymentRecord(TimestampedModel):
     target: DeployTarget
     environment: str
     status: str = "pending"
-    url: Optional[str] = None
+    url: str | None = None
     image_tag: str
-    previous_deployment_id: Optional[str] = None
+    previous_deployment_id: str | None = None
     health_status: str = "unknown"
     deployed_by: str = "forge-system"
     rollback_available: bool = True
@@ -51,5 +51,5 @@ class HealthStatus(BaseForgeModel):
     healthy: bool
     status_code: int = 200
     response_time_ms: int = 0
-    details: Dict[str, Any] = {}
+    details: dict[str, Any] = {}
     checked_at: datetime = Field(default_factory=datetime.utcnow)

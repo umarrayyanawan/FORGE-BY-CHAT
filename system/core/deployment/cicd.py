@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
@@ -21,7 +21,7 @@ class CICDBuilder:
             without pushing them (dry-run behaviour useful for testing).
     """
 
-    def __init__(self, github_client: Optional[Any] = None) -> None:
+    def __init__(self, github_client: Any | None = None) -> None:
         self.github = github_client
 
     # ------------------------------------------------------------------
@@ -33,7 +33,7 @@ class CICDBuilder:
         repo: str,
         project_spec: ProjectSpec,
         deploy_target: DeployTarget = DeployTarget.DOCKER,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Generate and (if a client is available) push GitHub Actions workflows.
 
         Returns a mapping of file path → YAML content.
@@ -42,7 +42,7 @@ class CICDBuilder:
         deploy_yaml = self._generate_deploy_workflow(project_spec, deploy_target)
         dependabot_yaml = self._generate_dependabot_config()
 
-        files: Dict[str, str] = {
+        files: dict[str, str] = {
             ".github/workflows/ci.yml": ci_yaml,
             ".github/workflows/deploy.yml": deploy_yaml,
             ".github/dependabot.yml": dependabot_yaml,

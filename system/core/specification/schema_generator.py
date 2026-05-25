@@ -14,9 +14,9 @@ from typing import Any
 from system.core.intent.schemas import ProjectIntent
 from system.core.specification.schemas import DBField, DBSchema, DBTable
 from system.observability.logging.logger import get_logger
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import SpecificationError
 from system.shared.llm_client import LLMMessage, get_llm_client
-from system.shared.constants import DEFAULT_LLM_MODEL
 
 logger = get_logger(__name__)
 
@@ -28,26 +28,70 @@ _USERS_TABLE = DBTable(
     name="users",
     description="Application users — one row per registered account.",
     fields=[
-        DBField(name="id", type="uuid", nullable=False, unique=True, indexed=True,
-                description="Primary key (UUID v4)"),
-        DBField(name="email", type="string", nullable=False, unique=True, indexed=True,
-                description="User's email address (login identifier)"),
-        DBField(name="hashed_password", type="string", nullable=False,
-                description="Bcrypt-hashed password"),
-        DBField(name="full_name", type="string", nullable=True,
-                description="Display name"),
-        DBField(name="role", type="string", nullable=False, default="user",
-                description="RBAC role: admin, user, viewer, etc."),
-        DBField(name="is_active", type="boolean", nullable=False, default=True,
-                description="Soft-delete / account suspension flag"),
-        DBField(name="is_verified", type="boolean", nullable=False, default=False,
-                description="Email verification status"),
-        DBField(name="last_login_at", type="datetime", nullable=True,
-                description="Timestamp of most recent successful login"),
-        DBField(name="created_at", type="datetime", nullable=False,
-                default="now()", description="Row creation timestamp"),
-        DBField(name="updated_at", type="datetime", nullable=False,
-                default="now()", description="Row last-update timestamp"),
+        DBField(
+            name="id",
+            type="uuid",
+            nullable=False,
+            unique=True,
+            indexed=True,
+            description="Primary key (UUID v4)",
+        ),
+        DBField(
+            name="email",
+            type="string",
+            nullable=False,
+            unique=True,
+            indexed=True,
+            description="User's email address (login identifier)",
+        ),
+        DBField(
+            name="hashed_password",
+            type="string",
+            nullable=False,
+            description="Bcrypt-hashed password",
+        ),
+        DBField(name="full_name", type="string", nullable=True, description="Display name"),
+        DBField(
+            name="role",
+            type="string",
+            nullable=False,
+            default="user",
+            description="RBAC role: admin, user, viewer, etc.",
+        ),
+        DBField(
+            name="is_active",
+            type="boolean",
+            nullable=False,
+            default=True,
+            description="Soft-delete / account suspension flag",
+        ),
+        DBField(
+            name="is_verified",
+            type="boolean",
+            nullable=False,
+            default=False,
+            description="Email verification status",
+        ),
+        DBField(
+            name="last_login_at",
+            type="datetime",
+            nullable=True,
+            description="Timestamp of most recent successful login",
+        ),
+        DBField(
+            name="created_at",
+            type="datetime",
+            nullable=False,
+            default="now()",
+            description="Row creation timestamp",
+        ),
+        DBField(
+            name="updated_at",
+            type="datetime",
+            nullable=False,
+            default="now()",
+            description="Row last-update timestamp",
+        ),
     ],
     indexes=[
         "CREATE INDEX idx_users_email ON users(email)",
@@ -60,29 +104,69 @@ _AUDIT_LOGS_TABLE = DBTable(
     name="audit_logs",
     description="Immutable audit trail of all significant system events.",
     fields=[
-        DBField(name="id", type="uuid", nullable=False, unique=True, indexed=True,
-                description="Primary key (UUID v4)"),
-        DBField(name="user_id", type="uuid", nullable=True, indexed=True,
-                foreign_key="users.id",
-                description="User who performed the action (NULL for system events)"),
-        DBField(name="action", type="string", nullable=False, indexed=True,
-                description="Action type, e.g. 'user.login', 'order.created'"),
-        DBField(name="entity_type", type="string", nullable=True, indexed=True,
-                description="Affected entity table name"),
-        DBField(name="entity_id", type="uuid", nullable=True, indexed=True,
-                description="Affected entity primary key"),
-        DBField(name="old_value", type="json", nullable=True,
-                description="Snapshot of entity state before the action"),
-        DBField(name="new_value", type="json", nullable=True,
-                description="Snapshot of entity state after the action"),
-        DBField(name="ip_address", type="string", nullable=True,
-                description="Client IP address"),
-        DBField(name="user_agent", type="string", nullable=True,
-                description="Client user-agent string"),
-        DBField(name="metadata", type="json", nullable=True,
-                description="Arbitrary additional context"),
-        DBField(name="created_at", type="datetime", nullable=False,
-                default="now()", description="When the event occurred"),
+        DBField(
+            name="id",
+            type="uuid",
+            nullable=False,
+            unique=True,
+            indexed=True,
+            description="Primary key (UUID v4)",
+        ),
+        DBField(
+            name="user_id",
+            type="uuid",
+            nullable=True,
+            indexed=True,
+            foreign_key="users.id",
+            description="User who performed the action (NULL for system events)",
+        ),
+        DBField(
+            name="action",
+            type="string",
+            nullable=False,
+            indexed=True,
+            description="Action type, e.g. 'user.login', 'order.created'",
+        ),
+        DBField(
+            name="entity_type",
+            type="string",
+            nullable=True,
+            indexed=True,
+            description="Affected entity table name",
+        ),
+        DBField(
+            name="entity_id",
+            type="uuid",
+            nullable=True,
+            indexed=True,
+            description="Affected entity primary key",
+        ),
+        DBField(
+            name="old_value",
+            type="json",
+            nullable=True,
+            description="Snapshot of entity state before the action",
+        ),
+        DBField(
+            name="new_value",
+            type="json",
+            nullable=True,
+            description="Snapshot of entity state after the action",
+        ),
+        DBField(name="ip_address", type="string", nullable=True, description="Client IP address"),
+        DBField(
+            name="user_agent", type="string", nullable=True, description="Client user-agent string"
+        ),
+        DBField(
+            name="metadata", type="json", nullable=True, description="Arbitrary additional context"
+        ),
+        DBField(
+            name="created_at",
+            type="datetime",
+            nullable=False,
+            default="now()",
+            description="When the event occurred",
+        ),
     ],
     indexes=[
         "CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)",
@@ -96,19 +180,46 @@ _REFRESH_TOKENS_TABLE = DBTable(
     name="refresh_tokens",
     description="Stores long-lived JWT refresh tokens for session management.",
     fields=[
-        DBField(name="id", type="uuid", nullable=False, unique=True, indexed=True,
-                description="Primary key"),
-        DBField(name="user_id", type="uuid", nullable=False, indexed=True,
-                foreign_key="users.id",
-                description="Owning user"),
-        DBField(name="token_hash", type="string", nullable=False, unique=True,
-                description="SHA-256 hash of the refresh token value"),
-        DBField(name="expires_at", type="datetime", nullable=False,
-                description="Token expiry timestamp"),
-        DBField(name="revoked", type="boolean", nullable=False, default=False,
-                description="Whether this token has been revoked"),
-        DBField(name="created_at", type="datetime", nullable=False, default="now()",
-                description="When the token was issued"),
+        DBField(
+            name="id",
+            type="uuid",
+            nullable=False,
+            unique=True,
+            indexed=True,
+            description="Primary key",
+        ),
+        DBField(
+            name="user_id",
+            type="uuid",
+            nullable=False,
+            indexed=True,
+            foreign_key="users.id",
+            description="Owning user",
+        ),
+        DBField(
+            name="token_hash",
+            type="string",
+            nullable=False,
+            unique=True,
+            description="SHA-256 hash of the refresh token value",
+        ),
+        DBField(
+            name="expires_at", type="datetime", nullable=False, description="Token expiry timestamp"
+        ),
+        DBField(
+            name="revoked",
+            type="boolean",
+            nullable=False,
+            default=False,
+            description="Whether this token has been revoked",
+        ),
+        DBField(
+            name="created_at",
+            type="datetime",
+            nullable=False,
+            default="now()",
+            description="When the token was issued",
+        ),
     ],
     indexes=[
         "CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id)",
@@ -179,9 +290,7 @@ class SchemaGenerator:
 
         # Merge baseline tables with domain tables (avoid duplication)
         baseline_names = {"users", "audit_logs", "refresh_tokens"}
-        domain_tables = [
-            t for t in domain_schema.tables if t.name not in baseline_names
-        ]
+        domain_tables = [t for t in domain_schema.tables if t.name not in baseline_names]
         all_tables = [_USERS_TABLE, _AUDIT_LOGS_TABLE, _REFRESH_TOKENS_TABLE] + domain_tables
 
         # Merge relationships
@@ -374,9 +483,7 @@ class SchemaGenerator:
         snake_re = re.compile(r"^[a-z][a-z0-9_]*$")
         for table in schema.tables:
             if not snake_re.match(table.name):
-                errors.append(
-                    f"Table name '{table.name}' does not follow snake_case convention"
-                )
+                errors.append(f"Table name '{table.name}' does not follow snake_case convention")
 
         if errors:
             raise SpecificationError(

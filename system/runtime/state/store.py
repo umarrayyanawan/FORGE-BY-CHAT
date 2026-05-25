@@ -27,7 +27,7 @@ Usage::
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -59,7 +59,7 @@ class StateStore:
     # Single-key operations
     # ------------------------------------------------------------------
 
-    async def get(self, key: str, model_class: Type[T]) -> Optional[T]:
+    async def get(self, key: str, model_class: type[T]) -> T | None:
         """Retrieve a single Pydantic model from Redis.
 
         Args:
@@ -88,7 +88,7 @@ class StateStore:
         self,
         key: str,
         value: BaseModel,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """Store a Pydantic model in Redis.
 
@@ -135,9 +135,9 @@ class StateStore:
 
     async def get_many(
         self,
-        keys: List[str],
-        model_class: Type[T],
-    ) -> List[T]:
+        keys: list[str],
+        model_class: type[T],
+    ) -> list[T]:
         """Retrieve multiple keys in a single MGET call.
 
         Keys that do not exist or fail deserialisation are silently skipped.
@@ -152,7 +152,7 @@ class StateStore:
         if not keys:
             return []
         raw_values = await self.redis.mget(*keys)
-        results: List[T] = []
+        results: list[T] = []
         for key, raw in zip(keys, raw_values):
             if raw is None:
                 continue
@@ -169,8 +169,8 @@ class StateStore:
 
     async def set_many(
         self,
-        items: Dict[str, BaseModel],
-        ttl: Optional[int] = None,
+        items: dict[str, BaseModel],
+        ttl: int | None = None,
     ) -> None:
         """Store multiple key → model pairs in a single pipeline.
 
@@ -189,7 +189,7 @@ class StateStore:
                 pipeline.set(key, serialised)
         await pipeline.execute()
 
-    async def delete_many(self, keys: List[str]) -> None:
+    async def delete_many(self, keys: list[str]) -> None:
         """Delete multiple keys in a single call.
 
         Args:
@@ -257,7 +257,7 @@ class StateStore:
         key: str,
         start: int = 0,
         end: int = -1,
-    ) -> List[str]:
+    ) -> list[str]:
         """Return a range of elements from a Redis list.
 
         Args:
@@ -269,9 +269,7 @@ class StateStore:
             List of string values.
         """
         raw = await self.redis.lrange(key, start, end)
-        return [
-            (v.decode() if isinstance(v, bytes) else v) for v in (raw or [])
-        ]
+        return [(v.decode() if isinstance(v, bytes) else v) for v in (raw or [])]
 
     async def list_length(self, key: str) -> int:
         """Return the number of elements in a Redis list."""
@@ -281,7 +279,7 @@ class StateStore:
     # Raw JSON operations (for non-Pydantic data)
     # ------------------------------------------------------------------
 
-    async def get_json(self, key: str) -> Optional[Any]:
+    async def get_json(self, key: str) -> Any | None:
         """Retrieve a raw JSON value from Redis and parse it.
 
         Returns:
@@ -297,7 +295,7 @@ class StateStore:
         self,
         key: str,
         value: Any,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> None:
         """Store any JSON-serialisable value in Redis.
 

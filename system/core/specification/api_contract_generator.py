@@ -15,15 +15,16 @@ from typing import Any
 from system.core.intent.schemas import ProjectIntent
 from system.core.specification.schemas import APIContract, APIEndpoint, DBSchema
 from system.observability.logging.logger import get_logger
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import SpecificationError
 from system.shared.llm_client import LLMMessage, get_llm_client
-from system.shared.constants import DEFAULT_LLM_MODEL
 
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------- #
 # Endpoints that must always be present in every FORGE project
 # ---------------------------------------------------------------------- #
+
 
 def _baseline_endpoints() -> list[APIEndpoint]:
     """Return the mandatory baseline endpoints for every project."""
@@ -167,10 +168,30 @@ def _baseline_endpoints() -> list[APIEndpoint]:
             auth_required=True,
             roles=["admin"],
             query_params=[
-                {"name": "page", "type": "integer", "required": "false", "description": "Page number"},
-                {"name": "page_size", "type": "integer", "required": "false", "description": "Items per page"},
-                {"name": "search", "type": "string", "required": "false", "description": "Filter by email or name"},
-                {"name": "role", "type": "string", "required": "false", "description": "Filter by role"},
+                {
+                    "name": "page",
+                    "type": "integer",
+                    "required": "false",
+                    "description": "Page number",
+                },
+                {
+                    "name": "page_size",
+                    "type": "integer",
+                    "required": "false",
+                    "description": "Items per page",
+                },
+                {
+                    "name": "search",
+                    "type": "string",
+                    "required": "false",
+                    "description": "Filter by email or name",
+                },
+                {
+                    "name": "role",
+                    "type": "string",
+                    "required": "false",
+                    "description": "Filter by role",
+                },
             ],
             response_schema={
                 "type": "object",
@@ -244,9 +265,7 @@ class APIContractGenerator:
     def __init__(self, llm_client: Any | None = None) -> None:
         self._llm = llm_client or get_llm_client()
 
-    async def generate(
-        self, intent: ProjectIntent, db_schema: DBSchema
-    ) -> APIContract:
+    async def generate(self, intent: ProjectIntent, db_schema: DBSchema) -> APIContract:
         """Generate a complete APIContract.
 
         Args:
@@ -296,10 +315,7 @@ class APIContractGenerator:
         # Merge baseline + domain, deduplicating on (method, path)
         baseline = _baseline_endpoints()
         baseline_keys = {(e.method, e.path) for e in baseline}
-        unique_domain = [
-            ep for ep in domain_endpoints
-            if (ep.method, ep.path) not in baseline_keys
-        ]
+        unique_domain = [ep for ep in domain_endpoints if (ep.method, ep.path) not in baseline_keys]
         all_endpoints = baseline + unique_domain
 
         contract = APIContract(

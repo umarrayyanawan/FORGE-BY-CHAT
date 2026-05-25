@@ -12,8 +12,8 @@ Usage::
 
 from __future__ import annotations
 
+from typing import Any
 import uuid
-from typing import Any, Dict, List
 
 from system.core.planning.schemas import (
     RepoTopology,
@@ -21,7 +21,6 @@ from system.core.planning.schemas import (
 )
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
-from system.shared.llm_client import LLMMessage
 
 logger = get_logger(__name__)
 
@@ -42,9 +41,7 @@ class TopologyEngine:
     # Public API
     # ------------------------------------------------------------------
 
-    async def generate(
-        self, spec: ProjectSpec, stack: Dict[str, str]
-    ) -> RepoTopology:
+    async def generate(self, spec: ProjectSpec, stack: dict[str, str]) -> RepoTopology:
         """Generate and return the complete RepoTopology for the project."""
         services = self._create_service_definitions(spec, stack)
         service_count = len(services)
@@ -88,14 +85,14 @@ class TopologyEngine:
     # ------------------------------------------------------------------
 
     def _create_service_definitions(
-        self, spec: ProjectSpec, stack: Dict[str, str]
-    ) -> List[ServiceDefinition]:
+        self, spec: ProjectSpec, stack: dict[str, str]
+    ) -> list[ServiceDefinition]:
         """Build the full list of ServiceDefinitions for this project.
 
         Always creates: api_service, worker_service, frontend_service.
         Adds extra services based on spec.intent flags.
         """
-        services: List[ServiceDefinition] = []
+        services: list[ServiceDefinition] = []
 
         backend_tech = stack.get("backend", "FastAPI")
         frontend_tech = stack.get("frontend", "Next.js")
@@ -105,7 +102,7 @@ class TopologyEngine:
         auth_tech = stack.get("auth", "JWT")
 
         # ---- 1. API Service (always) ------------------------------------
-        api_env: Dict[str, str] = {
+        api_env: dict[str, str] = {
             "DATABASE_URL": f"postgresql+asyncpg://user:pass@postgres:5432/{spec.project_id}",
             "REDIS_URL": "redis://redis:6379/0",
             "SECRET_KEY": "REPLACE_WITH_SECURE_KEY",
@@ -150,7 +147,7 @@ class TopologyEngine:
         )
 
         # ---- 3. Frontend Service (always) --------------------------------
-        frontend_env: Dict[str, str] = {
+        frontend_env: dict[str, str] = {
             "NEXT_PUBLIC_API_URL": "http://api_service:8000",
         }
         if "none" not in frontend_tech.lower():
@@ -299,7 +296,7 @@ class TopologyEngine:
     # Directory structure generation
     # ------------------------------------------------------------------
 
-    def generate_directory_structure(self, topology: "RepoTopology") -> Dict[str, Any]:
+    def generate_directory_structure(self, topology: RepoTopology) -> dict[str, Any]:
         """Return a nested dict representing the project file tree.
 
         Each value is either a nested dict (directory) or ``None`` (file).
@@ -310,9 +307,9 @@ class TopologyEngine:
 
     # ------------------------------------------------------------------
 
-    def _monorepo_structure(self, topology: "RepoTopology") -> Dict[str, Any]:
+    def _monorepo_structure(self, topology: RepoTopology) -> dict[str, Any]:
         """Monorepo layout — all services under one root."""
-        tree: Dict[str, Any] = {
+        tree: dict[str, Any] = {
             ".github": {
                 "workflows": {
                     "ci.yml": None,
@@ -370,9 +367,9 @@ class TopologyEngine:
 
         return tree
 
-    def _polyrepo_structure(self, topology: "RepoTopology") -> Dict[str, Any]:
+    def _polyrepo_structure(self, topology: RepoTopology) -> dict[str, Any]:
         """Polyrepo layout — one top-level entry per service repo."""
-        tree: Dict[str, Any] = {}
+        tree: dict[str, Any] = {}
         for svc in topology.services:
             tree[svc.name] = {
                 **self._service_tree(svc),
@@ -386,7 +383,7 @@ class TopologyEngine:
             }
         return tree
 
-    def _service_tree(self, svc: ServiceDefinition) -> Dict[str, Any]:
+    def _service_tree(self, svc: ServiceDefinition) -> dict[str, Any]:
         """Return the internal directory tree for a single service."""
         if svc.service_type == "frontend":
             return {

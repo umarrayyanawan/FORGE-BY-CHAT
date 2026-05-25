@@ -1,7 +1,8 @@
 """FastAPI router for Verification Engine endpoints."""
+
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/verification", tags=["verification"])
 
 def _get_engine() -> Any:
     from system.core.verification.engine import VerificationEngine
+
     return VerificationEngine()
 
 
@@ -32,7 +34,7 @@ async def get_report(report_id: str):
     return report
 
 
-@router.get("/project/{project_id}/reports", response_model=List[VerificationReport])
+@router.get("/project/{project_id}/reports", response_model=list[VerificationReport])
 async def list_reports(project_id: str):
     """List all verification reports for a project."""
     engine = _get_engine()

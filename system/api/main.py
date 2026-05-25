@@ -2,18 +2,37 @@
 
 from __future__ import annotations
 
-import time
-import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+import time
+from typing import Any
+import uuid
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from system.agents.router import router as agents_router
+from system.api.auth.router import router as auth_router
+from system.api.orchestration_api.router import router as pipeline_router
 from system.config.settings import settings
+from system.core.deployment.router import router as deployment_router
+from system.core.evolution.router import router as evolution_router
+
+# ---------------------------------------------------------------------------
+# Routers — imported last to avoid circular imports during startup
+# ---------------------------------------------------------------------------
+from system.core.intent.router import router as intent_router
+from system.core.memory.router import router as memory_router
+from system.core.monitoring.router import router as monitoring_router
+from system.core.orchestration.graph_router import router as task_graph_router
+from system.core.orchestration.orchestration_router import router as orchestration_router
+from system.core.planning.router import router as planning_router
+from system.core.specification.router import router as spec_router
+from system.core.verification.router import router as verification_router
 from system.observability.logging.logger import get_logger, setup_logging
+from system.repo_intelligence.router import router as intelligence_router
 from system.shared.database import check_db_connection, init_db
 from system.shared.exceptions import (
     AuthenticationError,
@@ -24,25 +43,7 @@ from system.shared.exceptions import (
 )
 from system.shared.redis_client import get_redis
 from system.shared.schemas import ErrorResponse, HealthCheckResponse
-
-# ---------------------------------------------------------------------------
-# Routers — imported last to avoid circular imports during startup
-# ---------------------------------------------------------------------------
-from system.core.intent.router import router as intent_router
-from system.core.specification.router import router as spec_router
-from system.core.planning.router import router as planning_router
-from system.core.orchestration.graph_router import router as task_graph_router
-from system.core.orchestration.orchestration_router import router as orchestration_router
-from system.agents.router import router as agents_router
-from system.repo_intelligence.router import router as intelligence_router
 from system.tools.router import router as tools_router
-from system.core.verification.router import router as verification_router
-from system.core.deployment.router import router as deployment_router
-from system.core.memory.router import router as memory_router
-from system.core.evolution.router import router as evolution_router
-from system.api.auth.router import router as auth_router
-from system.api.orchestration_api.router import router as pipeline_router
-from system.core.monitoring.router import router as monitoring_router
 
 logger = get_logger(__name__)
 
@@ -276,8 +277,8 @@ def create_app() -> FastAPI:
                 "# HELP forge_up Whether the FORGE API is running",
                 "# TYPE forge_up gauge",
                 "forge_up 1",
-                f'# HELP forge_version_info Version info for FORGE',
-                f'# TYPE forge_version_info gauge',
+                "# HELP forge_version_info Version info for FORGE",
+                "# TYPE forge_version_info gauge",
                 f'forge_version_info{{version="{settings.version}"}} 1',
             ]
             return PlainTextResponse(

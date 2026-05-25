@@ -58,9 +58,7 @@ class GenerateSpecResponse(BaseForgeModel):
 class UpdateSpecRequest(BaseForgeModel):
     """Request body for PUT /spec/{project_id}."""
 
-    updates: dict[str, Any] = Field(
-        description="Key-value pairs of ProjectSpec fields to update"
-    )
+    updates: dict[str, Any] = Field(description="Key-value pairs of ProjectSpec fields to update")
 
 
 # ========================================================================== #

@@ -1,6 +1,7 @@
 """FastAPI router for Repo Intelligence Engine endpoints."""
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+
+from fastapi import APIRouter, Query
+
 from system.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)

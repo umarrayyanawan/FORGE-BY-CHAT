@@ -9,9 +9,9 @@ defaults.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from system.agents.base import AgentContract, AgentContext, AgentResult, BaseAgent
+from system.agents.base import AgentContext, AgentContract, AgentResult, BaseAgent
 from system.agents.prompts import (
     FILE_OUTPUT_FORMAT,
     FORGE_AGENT_PREAMBLE,
@@ -64,8 +64,8 @@ class InfraAgent(BaseAgent):
     def build_contract(
         self,
         task: TaskNode,
-        spec: Optional[ProjectSpec],
-        arch: Optional[ArchitecturePlan],
+        spec: ProjectSpec | None,
+        arch: ArchitecturePlan | None,
     ) -> AgentContract:
         """Build a scoped AgentContract for an infrastructure task.
 

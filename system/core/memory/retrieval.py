@@ -1,11 +1,12 @@
 """Memory retrieval pipeline — combined semantic + episodic retrieval with reranking."""
+
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any
 
+from system.core.memory.episodic_memory import EpisodicMemory
 from system.core.memory.schemas import MemoryEntry, MemoryType
 from system.core.memory.semantic_memory import SemanticMemory
-from system.core.memory.episodic_memory import EpisodicMemory
 from system.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,18 +21,16 @@ class MemoryRetriever:
         self,
         project_id: str,
         query: str,
-        memory_types: Optional[List[MemoryType]] = None,
+        memory_types: list[MemoryType] | None = None,
         limit: int = 10,
-    ) -> List[MemoryEntry]:
-        results: List[MemoryEntry] = []
+    ) -> list[MemoryEntry]:
+        results: list[MemoryEntry] = []
         half = max(limit // 2, 3)
 
         if memory_types is None or MemoryType.SEMANTIC in memory_types:
             results.extend(await self.semantic.retrieve(project_id, query, limit=half))
         if memory_types is None or MemoryType.EPISODIC in memory_types:
-            results.extend(
-                await self.episodic.get_similar_episodes(project_id, query, limit=half)
-            )
+            results.extend(await self.episodic.get_similar_episodes(project_id, query, limit=half))
 
         seen: set = set()
         unique = []
@@ -44,8 +43,8 @@ class MemoryRetriever:
 
     async def retrieve_for_agent(
         self, project_id: str, agent_type: Any, task_description: str
-    ) -> List[MemoryEntry]:
+    ) -> list[MemoryEntry]:
         return await self.retrieve_relevant(project_id, task_description, limit=5)
 
-    async def retrieve_architecture_decisions(self, project_id: str) -> List:
+    async def retrieve_architecture_decisions(self, project_id: str) -> list:
         return []

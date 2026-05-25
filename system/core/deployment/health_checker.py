@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -24,7 +24,7 @@ class HealthChecker:
             themselves.
     """
 
-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None) -> None:
+    def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
         self._owned_client = http_client is None
         self.client: httpx.AsyncClient = http_client or httpx.AsyncClient(timeout=10.0)
 
@@ -37,7 +37,7 @@ class HealthChecker:
         if self._owned_client:
             await self.client.aclose()
 
-    async def __aenter__(self) -> "HealthChecker":
+    async def __aenter__(self) -> HealthChecker:
         return self
 
     async def __aexit__(self, *_: Any) -> None:
@@ -62,7 +62,7 @@ class HealthChecker:
             )
             response_time_ms = int((time.monotonic() - start) * 1000)
             healthy = response.status_code == expected_status
-            details: Dict[str, Any] = {
+            details: dict[str, Any] = {
                 "url": url,
                 "status_code": response.status_code,
             }
@@ -85,7 +85,7 @@ class HealthChecker:
                 response_time_ms=response_time_ms,
                 details=details,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             response_time_ms = int((time.monotonic() - start) * 1000)
             logger.warning("Health check timed out", url=url, timeout=timeout)
             return HealthStatus(
@@ -165,8 +165,8 @@ class HealthChecker:
     async def check_all_services(
         self,
         deployment_id: str,
-        services: List[Dict[str, Any]],
-    ) -> Dict[str, HealthStatus]:
+        services: list[dict[str, Any]],
+    ) -> dict[str, HealthStatus]:
         """Check every service in *services* concurrently.
 
         Each entry in *services* should have the keys:
@@ -176,7 +176,8 @@ class HealthChecker:
 
         Returns a mapping of service name → :class:`HealthStatus`.
         """
-        async def _check_one(svc: Dict[str, Any]) -> tuple[str, HealthStatus]:
+
+        async def _check_one(svc: dict[str, Any]) -> tuple[str, HealthStatus]:
             name = svc.get("name", "unknown")
             url = svc.get("health_url", "")
             if not url:
@@ -193,7 +194,7 @@ class HealthChecker:
             *[_check_one(svc) for svc in services],
             return_exceptions=False,
         )
-        results: Dict[str, HealthStatus] = dict(results_list)  # type: ignore[arg-type]
+        results: dict[str, HealthStatus] = dict(results_list)  # type: ignore[arg-type]
         healthy_count = sum(1 for s in results.values() if s.healthy)
         logger.info(
             "Bulk health check complete",

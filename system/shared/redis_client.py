@@ -9,10 +9,9 @@ Provides:
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncGenerator
 from functools import lru_cache
-from typing import Optional
+import logging
 
 import redis
 import redis.asyncio as aioredis
@@ -127,7 +126,7 @@ async def redis_ping() -> bool:
 async def redis_set_json(
     key: str,
     value: dict,
-    ttl_seconds: Optional[int] = None,
+    ttl_seconds: int | None = None,
 ) -> None:
     """Serialise *value* as JSON and store under *key* with optional TTL."""
     import json
@@ -140,7 +139,7 @@ async def redis_set_json(
         await client.set(key, raw)
 
 
-async def redis_get_json(key: str) -> Optional[dict]:
+async def redis_get_json(key: str) -> dict | None:
     """Retrieve and deserialise a JSON value from Redis.  Returns None on miss."""
     import json
 

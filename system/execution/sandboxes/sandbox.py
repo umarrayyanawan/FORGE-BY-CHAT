@@ -1,12 +1,13 @@
 """Sandbox — isolated execution environment for a single agent task."""
+
 from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 import shutil
 import tempfile
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.observability.logging.logger import get_logger
 
@@ -19,7 +20,7 @@ class SandboxResult:
         exit_code: int,
         stdout: str,
         stderr: str,
-        files_written: List[str],
+        files_written: list[str],
         sandbox_path: str,
     ) -> None:
         self.exit_code = exit_code
@@ -36,9 +37,11 @@ class SandboxResult:
 class Sandbox:
     """Ephemeral filesystem sandbox for a single agent execution."""
 
-    def __init__(self, task_id: str, base_path: Optional[str] = None) -> None:
+    def __init__(self, task_id: str, base_path: str | None = None) -> None:
         self.task_id = task_id
-        self._base = Path(base_path) if base_path else Path(tempfile.mkdtemp(prefix=f"forge_{task_id}_"))
+        self._base = (
+            Path(base_path) if base_path else Path(tempfile.mkdtemp(prefix=f"forge_{task_id}_"))
+        )
         self._active = True
 
     @property
@@ -60,7 +63,7 @@ class Sandbox:
         self,
         command: str,
         timeout: int = 120,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ) -> SandboxResult:
         if not self._active:
             raise RuntimeError("Sandbox is closed")
@@ -74,10 +77,8 @@ class Sandbox:
             env=merged_env,
         )
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return SandboxResult(
@@ -88,11 +89,7 @@ class Sandbox:
                 sandbox_path=str(self._base),
             )
 
-        files = [
-            str(f.relative_to(self._base))
-            for f in self._base.rglob("*")
-            if f.is_file()
-        ]
+        files = [str(f.relative_to(self._base)) for f in self._base.rglob("*") if f.is_file()]
         return SandboxResult(
             exit_code=proc.returncode or 0,
             stdout=stdout_bytes.decode("utf-8", errors="replace"),
@@ -116,7 +113,7 @@ class Sandbox:
             self._active = False
             logger.debug("Sandbox destroyed", task_id=self.task_id)
 
-    def __enter__(self) -> "Sandbox":
+    def __enter__(self) -> Sandbox:
         return self
 
     def __exit__(self, *args: Any) -> None:

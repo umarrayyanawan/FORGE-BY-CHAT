@@ -6,16 +6,16 @@ a valid topological build order using Kahn's algorithm.
 
 from __future__ import annotations
 
+from collections import defaultdict, deque
 import json
 import re
 import textwrap
-from collections import defaultdict, deque
 from typing import TYPE_CHECKING, Any
 
 from system.observability.logging.logger import get_logger
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import SpecificationError
 from system.shared.llm_client import LLMMessage, get_llm_client
-from system.shared.constants import DEFAULT_LLM_MODEL
 
 if TYPE_CHECKING:
     from system.core.specification.schemas import FeatureDependency, ProjectSpec
@@ -35,9 +35,7 @@ class DependencyAnalyzer:
     def __init__(self, llm_client: Any | None = None) -> None:
         self._llm = llm_client or get_llm_client()
 
-    async def analyze(
-        self, spec: "ProjectSpec"
-    ) -> list["FeatureDependency"]:
+    async def analyze(self, spec: ProjectSpec) -> list[FeatureDependency]:
         """Build the feature dependency list for a ProjectSpec.
 
         Args:
@@ -119,9 +117,7 @@ class DependencyAnalyzer:
 
         return deps
 
-    def detect_cycles(
-        self, deps: list["FeatureDependency"]
-    ) -> list[list[str]]:
+    def detect_cycles(self, deps: list[FeatureDependency]) -> list[list[str]]:
         """Detect cycles in the dependency graph using iterative DFS.
 
         Args:
@@ -170,9 +166,7 @@ class DependencyAnalyzer:
 
         return cycles
 
-    def get_execution_order(
-        self, deps: list["FeatureDependency"]
-    ) -> list[str]:
+    def get_execution_order(self, deps: list[FeatureDependency]) -> list[str]:
         """Return features in safe build order using Kahn's topological sort.
 
         Features with no dependencies come first; dependents come after their
@@ -203,9 +197,7 @@ class DependencyAnalyzer:
                 in_degree[dep.feature] = in_degree.get(dep.feature, 0) + 1
 
         # Kahn's algorithm
-        queue: deque[str] = deque(
-            sorted(f for f, d in in_degree.items() if d == 0)
-        )
+        queue: deque[str] = deque(sorted(f for f, d in in_degree.items() if d == 0))
         order: list[str] = []
 
         while queue:
@@ -246,11 +238,11 @@ class DependencyAnalyzer:
             Output ONLY valid JSON — no markdown, no explanations.
         """)
 
-    def _build_dependency_prompt(self, spec: "ProjectSpec") -> str:
+    def _build_dependency_prompt(self, spec: ProjectSpec) -> str:
         """Construct the LLM prompt for dependency analysis."""
-        features_list = "\n".join(
-            f"- {f}" for f in spec.intent.core_features
-        ) or "- No features specified"
+        features_list = (
+            "\n".join(f"- {f}" for f in spec.intent.core_features) or "- No features specified"
+        )
 
         # Add table names as context
         tables = spec.db_schema.table_names() if spec.db_schema else []
@@ -296,9 +288,7 @@ class DependencyAnalyzer:
             - Features that can be built in parallel should have minimal blocking=true
         """)
 
-    def _parse_dependencies(
-        self, response: str
-    ) -> list["FeatureDependency"]:
+    def _parse_dependencies(self, response: str) -> list[FeatureDependency]:
         """Parse LLM JSON array into FeatureDependency models."""
         from system.core.specification.schemas import FeatureDependency
 

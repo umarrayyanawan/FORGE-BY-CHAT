@@ -1,7 +1,8 @@
 """FastAPI router for Memory Engine endpoints."""
-from fastapi import APIRouter, HTTPException
-from typing import List, Optional
-from system.core.memory.schemas import MemoryEntry, ArchitectureDecision
+
+from fastapi import APIRouter
+
+from system.core.memory.schemas import ArchitectureDecision, MemoryEntry
 
 router = APIRouter(prefix="/memory", tags=["memory"])
 
@@ -11,11 +12,12 @@ async def store_memory(
     project_id: str,
     title: str,
     content: str,
-    tags: List[str] = [],
+    tags: list[str] = [],
     importance: float = 0.5,
 ):
     """Store a semantic memory entry for a project."""
     from system.core.memory.semantic_memory import SemanticMemory
+
     mem = SemanticMemory()
     return await mem.store(project_id, title, content, tags, importance)
 
@@ -24,6 +26,7 @@ async def store_memory(
 async def retrieve_memories(project_id: str, query: str, limit: int = 5):
     """Semantic similarity search over project memories."""
     from system.core.memory.semantic_memory import SemanticMemory
+
     mem = SemanticMemory()
     results = await mem.retrieve(project_id, query, limit=limit)
     return {"project_id": project_id, "query": query, "results": [r.model_dump() for r in results]}

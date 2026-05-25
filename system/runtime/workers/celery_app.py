@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-from typing import Any, Dict
+from typing import Any
 
 from celery.utils.log import get_task_logger
 
@@ -42,10 +42,10 @@ logger = get_task_logger(__name__)
     acks_late=True,
     reject_on_worker_lost=True,
     track_started=True,
-    time_limit=3600,       # hard kill after 1 h
+    time_limit=3600,  # hard kill after 1 h
     soft_time_limit=3300,  # raises SoftTimeLimitExceeded at 55 min
 )
-def execute_agent_task(self: Any, task_data: Dict[str, Any]) -> Dict[str, Any]:
+def execute_agent_task(self: Any, task_data: dict[str, Any]) -> dict[str, Any]:
     """Execute an agent task. Dispatches to the correct specialist agent.
 
     Args:
@@ -95,7 +95,7 @@ def execute_agent_task(self: Any, task_data: Dict[str, Any]) -> Dict[str, Any]:
             self.max_retries + 1,
             str(exc),
         )
-        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))
 
 
 # ========================================================================== #
@@ -108,7 +108,7 @@ def execute_agent_task(self: Any, task_data: Dict[str, Any]) -> Dict[str, Any]:
     queue="forge.tasks",
     ignore_result=False,
 )
-def cleanup_expired_sessions() -> Dict[str, Any]:
+def cleanup_expired_sessions() -> dict[str, Any]:
     """Scan Redis for expired FORGE session/intent keys and enforce TTLs.
 
     Keys without a TTL are assigned a 24-hour expiry.  This prevents unbounded
@@ -134,9 +134,7 @@ def cleanup_expired_sessions() -> Dict[str, Any]:
                 r.expire(key, 86400)  # 24 h
                 updated += 1
 
-    logger.info(
-        "Session cleanup complete: scanned=%d updated_ttl=%d", scanned, updated
-    )
+    logger.info("Session cleanup complete: scanned=%d updated_ttl=%d", scanned, updated)
     return {
         "status": "ok",
         "scanned": scanned,
@@ -150,7 +148,7 @@ def cleanup_expired_sessions() -> Dict[str, Any]:
     queue="forge.tasks",
     ignore_result=False,
 )
-def aggregate_metrics() -> Dict[str, Any]:
+def aggregate_metrics() -> dict[str, Any]:
     """Aggregate and store a metrics snapshot to Redis.
 
     Reads counters from the observability collector and writes a 5-minute
@@ -171,11 +169,11 @@ def aggregate_metrics() -> Dict[str, Any]:
         metrics = {}
 
     try:
+        import json  # noqa: PLC0415
+
         import redis as redis_lib  # noqa: PLC0415
 
         from system.config.settings import settings  # noqa: PLC0415
-
-        import json  # noqa: PLC0415
 
         r = redis_lib.from_url(settings.redis_url, decode_responses=True)
         snapshot_key = f"FORGE:METRICS:SNAPSHOT:{timestamp.strftime('%Y%m%dT%H%M')}"
@@ -192,7 +190,7 @@ def aggregate_metrics() -> Dict[str, Any]:
     queue="forge.tasks",
     ignore_result=False,
 )
-def health_check() -> Dict[str, Any]:
+def health_check() -> dict[str, Any]:
     """Simple liveness check — confirms the worker is online and responsive.
 
     Returns:
@@ -214,7 +212,7 @@ def health_check() -> Dict[str, Any]:
     queue="forge.tasks",
     ignore_result=False,
 )
-def consolidate_memory() -> Dict[str, Any]:
+def consolidate_memory() -> dict[str, Any]:
     """Nightly memory consolidation — compacts old agent memory entries.
 
     Reads FORGE:MEMORY:* keys older than 7 days and archives them to
@@ -223,7 +221,6 @@ def consolidate_memory() -> Dict[str, Any]:
     Returns:
         Dict with consolidation statistics.
     """
-    import json  # noqa: PLC0415
 
     try:
         import redis as redis_lib  # noqa: PLC0415
@@ -232,9 +229,7 @@ def consolidate_memory() -> Dict[str, Any]:
 
         r = redis_lib.from_url(settings.redis_url, decode_responses=True)
         consolidated = 0
-        cutoff_ts = (
-            datetime.datetime.utcnow() - datetime.timedelta(days=7)
-        ).timestamp()
+        (datetime.datetime.utcnow() - datetime.timedelta(days=7)).timestamp()
 
         for key in r.scan_iter("FORGE:MEMORY:*", count=100):
             # Keys with TTL remaining are still "fresh"

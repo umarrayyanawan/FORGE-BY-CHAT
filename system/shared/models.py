@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
+import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ========================================================================== #
 # Enums
 # ========================================================================== #
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Lifecycle states for any FORGE task."""
 
     PENDING = "pending"
@@ -25,7 +24,7 @@ class TaskStatus(str, Enum):
     BLOCKED = "blocked"
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     """Available specialist agent roles."""
 
     ARCHITECT = "architect"
@@ -38,7 +37,7 @@ class AgentType(str, Enum):
     REFACTOR = "refactor"
 
 
-class ExecutionPhase(str, Enum):
+class ExecutionPhase(StrEnum):
     """High-level phases of the FORGE software-production pipeline."""
 
     INTENT = "intent"
@@ -54,7 +53,7 @@ class ExecutionPhase(str, Enum):
     ITERATION = "iteration"
 
 
-class Priority(str, Enum):
+class Priority(StrEnum):
     """Task / work-item priority levels."""
 
     CRITICAL = "critical"
@@ -63,7 +62,7 @@ class Priority(str, Enum):
     LOW = "low"
 
 
-class DeployTarget(str, Enum):
+class DeployTarget(StrEnum):
     """Supported deployment infrastructure targets."""
 
     DOCKER = "docker"
@@ -74,7 +73,7 @@ class DeployTarget(str, Enum):
     GCP = "gcp"
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     """Application platform / surface area."""
 
     WEB = "web"
@@ -84,7 +83,7 @@ class Platform(str, Enum):
     API = "api"
 
 
-class ValidationStatus(str, Enum):
+class ValidationStatus(StrEnum):
     """Result states for a validation check."""
 
     PASSED = "passed"
@@ -115,6 +114,6 @@ class TimestampedModel(BaseForgeModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    def touch(self) -> "TimestampedModel":
+    def touch(self) -> TimestampedModel:
         """Return a copy of this model with updated_at refreshed."""
         return self.model_copy(update={"updated_at": datetime.utcnow()})

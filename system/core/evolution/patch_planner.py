@@ -1,7 +1,8 @@
 """Patch planner — creates safe, step-by-step patch plans for applying changes."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from system.core.evolution.schemas import ChangeRequest, DiffAnalysis, PatchPlan
 from system.observability.logging.logger import get_logger
@@ -29,9 +30,7 @@ class PatchPlanner:
             risk_level=risk,
         )
 
-    async def _generate_tasks(
-        self, req: ChangeRequest, diff: DiffAnalysis
-    ) -> List[Dict[str, Any]]:
+    async def _generate_tasks(self, req: ChangeRequest, diff: DiffAnalysis) -> list[dict[str, Any]]:
         if self.llm_client:
             try:
                 prompt = (
@@ -48,6 +47,7 @@ class PatchPlanner:
                     temperature=0.1,
                 )
                 import json
+
                 content = response.content.strip()
                 start = content.find("[")
                 end = content.rfind("]") + 1
@@ -57,18 +57,36 @@ class PatchPlanner:
                 logger.warning("LLM task generation failed", error=str(exc))
         return self._default_tasks(req, diff)
 
-    def _default_tasks(self, req: ChangeRequest, diff: DiffAnalysis) -> List[Dict[str, Any]]:
+    def _default_tasks(self, req: ChangeRequest, diff: DiffAnalysis) -> list[dict[str, Any]]:
         return [
-            {"id": "t1", "title": "Implement changes", "description": req.description, "agent_type": "backend", "priority": "high"},
-            {"id": "t2", "title": "Update tests", "description": "Add/update tests for changed code", "agent_type": "qa", "priority": "high"},
-            {"id": "t3", "title": "Review security impact", "description": "Ensure no security regressions", "agent_type": "security", "priority": "medium"},
+            {
+                "id": "t1",
+                "title": "Implement changes",
+                "description": req.description,
+                "agent_type": "backend",
+                "priority": "high",
+            },
+            {
+                "id": "t2",
+                "title": "Update tests",
+                "description": "Add/update tests for changed code",
+                "agent_type": "qa",
+                "priority": "high",
+            },
+            {
+                "id": "t3",
+                "title": "Review security impact",
+                "description": "Ensure no security regressions",
+                "agent_type": "security",
+                "priority": "medium",
+            },
         ]
 
     def _generate_rollback_plan(self, diff: DiffAnalysis) -> str:
         steps = ["1. Stop affected services", "2. Revert code changes via git revert"]
         if diff.migration_required:
             steps.append("3. Run alembic downgrade -1 to revert DB migration")
-        steps.append(f"{len(steps)+1}. Restart services and verify health checks")
+        steps.append(f"{len(steps) + 1}. Restart services and verify health checks")
         return "\n".join(steps)
 
     def _generate_regression_plan(self, diff: DiffAnalysis) -> str:

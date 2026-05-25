@@ -9,15 +9,11 @@ Retrieval pipeline:
 
 from __future__ import annotations
 
-import os
-from typing import Dict, List, Optional
-
 from system.observability.logging.logger import get_logger
 from system.repo_intelligence.embeddings.embedder import CodeEmbedder
 from system.repo_intelligence.graph.builder import GraphBuilder
 from system.repo_intelligence.schemas import CodeChunk, SearchResult
 from system.shared.constants import MEMORY_SIMILARITY_THRESHOLD
-from system.shared.exceptions import RepoIntelligenceError
 
 logger = get_logger(__name__)
 
@@ -47,7 +43,7 @@ class SemanticRetriever:
         query: str,
         project_id: str,
         limit: int = 10,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Full semantic search pipeline.
 
         1. Embed the query.
@@ -78,12 +74,11 @@ class SemanticRetriever:
         centrality_map = await self._compute_centrality(project_id, file_paths)
 
         # Re-rank
-        scored: List[tuple[float, SearchResult]] = []
+        scored: list[tuple[float, SearchResult]] = []
         for result in raw_results:
             centrality = centrality_map.get(result.file_path, 0.0)
             combined = (
-                _SIMILARITY_WEIGHT * result.similarity_score
-                + _CENTRALITY_WEIGHT * centrality
+                _SIMILARITY_WEIGHT * result.similarity_score + _CENTRALITY_WEIGHT * centrality
             )
             scored.append((combined, result))
 
@@ -91,7 +86,7 @@ class SemanticRetriever:
         top = scored[:limit]
 
         # Add surrounding file context
-        enriched: List[SearchResult] = []
+        enriched: list[SearchResult] = []
         for _, result in top:
             context = self._add_surrounding_context(
                 result.chunk,
@@ -116,7 +111,7 @@ class SemanticRetriever:
         task_description: str,
         project_id: str,
         max_files: int = 20,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Return {file_path: relevant_content} for agent context injection.
 
         Retrieves the most semantically relevant code sections for a task,
@@ -136,7 +131,7 @@ class SemanticRetriever:
             limit=max_files * 3,
         )
 
-        context_map: Dict[str, List[str]] = {}
+        context_map: dict[str, list[str]] = {}
         for result in results:
             fp = result.file_path
             if len(context_map) >= max_files and fp not in context_map:
@@ -149,9 +144,7 @@ class SemanticRetriever:
     # Similar code search
     # ------------------------------------------------------------------
 
-    async def find_similar_code(
-        self, code_snippet: str, project_id: str
-    ) -> List[SearchResult]:
+    async def find_similar_code(self, code_snippet: str, project_id: str) -> list[SearchResult]:
         """Find code chunks semantically similar to *code_snippet*."""
         return await self.search(
             query=code_snippet,
@@ -181,8 +174,8 @@ class SemanticRetriever:
             return f"No indexed data found for {file_path}"
 
         lines = [f"File: {file_path}", f"Indexed chunks: {len(chunks)}", ""]
-        module_doc: Optional[str] = None
-        definitions: List[str] = []
+        module_doc: str | None = None
+        definitions: list[str] = []
 
         for chunk in chunks:
             ctype = chunk.get("chunk_type", "")
@@ -224,7 +217,7 @@ class SemanticRetriever:
     def _read_file_safe(self, file_path: str) -> str:
         """Read file content without raising on missing files."""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+            with open(file_path, encoding="utf-8", errors="replace") as fh:
                 return fh.read()
         except OSError:
             return ""
@@ -233,9 +226,7 @@ class SemanticRetriever:
     # Graph centrality scoring
     # ------------------------------------------------------------------
 
-    async def _compute_centrality(
-        self, project_id: str, file_paths: List[str]
-    ) -> Dict[str, float]:
+    async def _compute_centrality(self, project_id: str, file_paths: list[str]) -> dict[str, float]:
         """Compute a normalised in-degree centrality for each file.
 
         Files imported by many others are considered more central and
@@ -245,7 +236,7 @@ class SemanticRetriever:
             return {}
 
         # Use impact_set size as a proxy for centrality
-        centrality: Dict[str, int] = {}
+        centrality: dict[str, int] = {}
         for fp in file_paths:
             try:
                 impact = await self._graph.get_impact_set(project_id, fp)

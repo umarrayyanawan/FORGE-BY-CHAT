@@ -7,13 +7,12 @@ work into agent-executable tasks.
 
 from __future__ import annotations
 
+from typing import Any
 import uuid
-from typing import Any, Dict, List, Optional
 
 from pydantic import Field, field_validator
 
-from system.shared.models import BaseForgeModel, TimestampedModel, DeployTarget
-
+from system.shared.models import BaseForgeModel, DeployTarget, TimestampedModel
 
 # ========================================================================== #
 # Service Definition
@@ -28,18 +27,22 @@ class ServiceDefinition(BaseForgeModel):
         ...,
         description="Category: 'backend' | 'frontend' | 'worker' | 'database' | 'cache' | 'gateway'.",
     )
-    technology: str = Field(..., description="Primary technology, e.g. 'FastAPI', 'React', 'PostgreSQL'.")
-    language: str = Field(default="", description="Programming language, e.g. 'Python', 'TypeScript'.")
+    technology: str = Field(
+        ..., description="Primary technology, e.g. 'FastAPI', 'React', 'PostgreSQL'."
+    )
+    language: str = Field(
+        default="", description="Programming language, e.g. 'Python', 'TypeScript'."
+    )
     port: int = Field(default=8000, gt=0, description="Primary listen port.")
-    dependencies: List[str] = Field(
+    dependencies: list[str] = Field(
         default_factory=list,
         description="Names of other services this service depends on at runtime.",
     )
-    environment_variables: Dict[str, str] = Field(
+    environment_variables: dict[str, str] = Field(
         default_factory=dict,
         description="Required env-var names (values are placeholders or descriptions).",
     )
-    scaling: Dict[str, Any] = Field(
+    scaling: dict[str, Any] = Field(
         default_factory=dict,
         description="Scaling configuration: min_replicas, max_replicas, cpu_threshold, etc.",
     )
@@ -65,7 +68,7 @@ class InfraComponent(BaseForgeModel):
         default=False,
         description="True if using a managed cloud service; False for self-hosted.",
     )
-    config: Dict[str, Any] = Field(
+    config: dict[str, Any] = Field(
         default_factory=dict,
         description="Component-specific configuration knobs.",
     )
@@ -94,7 +97,7 @@ class SecurityArchitecture(BaseForgeModel):
         default="environment",
         description="'environment' | 'vault' | 'aws_secrets_manager' | 'k8s_secrets'.",
     )
-    additional_controls: List[str] = Field(
+    additional_controls: list[str] = Field(
         default_factory=list,
         description="Additional controls: WAF, DDoS protection, IP allowlist, etc.",
     )
@@ -119,11 +122,11 @@ class ArchitecturePlan(TimestampedModel):
     project_id: str = Field(..., description="FORGE project this plan belongs to.")
     spec_id: str = Field(..., description="ProjectSpec this plan was derived from.")
 
-    services: List[ServiceDefinition] = Field(
+    services: list[ServiceDefinition] = Field(
         default_factory=list,
         description="All application services in the system.",
     )
-    infra_components: List[InfraComponent] = Field(
+    infra_components: list[InfraComponent] = Field(
         default_factory=list,
         description="Infrastructure components required by the services.",
     )
@@ -159,7 +162,7 @@ class ArchitecturePlan(TimestampedModel):
         default="",
         description="Mermaid C4 or architecture diagram source.",
     )
-    adr_notes: List[str] = Field(
+    adr_notes: list[str] = Field(
         default_factory=list,
         description="Architecture Decision Records captured during planning.",
     )
@@ -172,15 +175,15 @@ class ArchitecturePlan(TimestampedModel):
         valid = {"monolith", "microservices", "serverless", "event-driven"}
         return v if v in valid else "monolith"
 
-    def backend_services(self) -> List[ServiceDefinition]:
+    def backend_services(self) -> list[ServiceDefinition]:
         """Return only backend/worker service definitions."""
         return [s for s in self.services if s.service_type in {"backend", "worker"}]
 
-    def frontend_services(self) -> List[ServiceDefinition]:
+    def frontend_services(self) -> list[ServiceDefinition]:
         """Return only frontend service definitions."""
         return [s for s in self.services if s.service_type == "frontend"]
 
-    def infra_services(self) -> List[ServiceDefinition]:
+    def infra_services(self) -> list[ServiceDefinition]:
         """Return only gateway/infrastructure service definitions."""
         return [s for s in self.services if s.service_type in {"gateway", "database", "cache"}]
 
@@ -202,15 +205,15 @@ class RepoTopology(BaseForgeModel):
         default="monorepo",
         description="'monorepo' | 'polyrepo' — organisation of source repositories.",
     )
-    services: List[ServiceDefinition] = Field(
+    services: list[ServiceDefinition] = Field(
         default_factory=list,
         description="All deployable services in this topology.",
     )
-    monorepo_root: Optional[str] = Field(
+    monorepo_root: str | None = Field(
         default=".",
         description="Root path of the monorepo (if repo_type == 'monorepo').",
     )
-    directory_structure: Dict[str, Any] = Field(
+    directory_structure: dict[str, Any] = Field(
         default_factory=dict,
         description="Nested dict representing the repo file tree.",
     )
@@ -235,7 +238,7 @@ class InfrastructurePlan(BaseForgeModel):
         default="aws",
         description="Target cloud provider: 'aws' | 'gcp' | 'azure' | 'self-hosted'.",
     )
-    cloud_services: List[str] = Field(
+    cloud_services: list[str] = Field(
         default_factory=list,
         description="Required managed cloud services, e.g. ['RDS', 'ElastiCache', 'EKS'].",
     )
@@ -244,11 +247,11 @@ class InfrastructurePlan(BaseForgeModel):
         ge=0.0,
         description="Estimated monthly infrastructure cost in USD.",
     )
-    cost_breakdown: Dict[str, float] = Field(
+    cost_breakdown: dict[str, float] = Field(
         default_factory=dict,
         description="Per-service cost breakdown: {'RDS': 150.0, 'EKS': 300.0, ...}.",
     )
-    regions: List[str] = Field(
+    regions: list[str] = Field(
         default_factory=list,
         description="Deployment regions, e.g. ['us-east-1', 'eu-west-1'].",
     )
@@ -260,7 +263,7 @@ class InfrastructurePlan(BaseForgeModel):
         default="none",
         description="DR strategy: 'none' | 'warm-standby' | 'hot-standby' | 'multi-region'.",
     )
-    notes: List[str] = Field(
+    notes: list[str] = Field(
         default_factory=list,
         description="Additional infrastructure notes and recommendations.",
     )
@@ -288,11 +291,11 @@ class ScalabilityProfile(BaseForgeModel):
         ge=0.0,
         description="Estimated data volume in GB.",
     )
-    bottlenecks: List[str] = Field(
+    bottlenecks: list[str] = Field(
         default_factory=list,
         description="Identified scaling bottlenecks.",
     )
-    recommendations: List[str] = Field(
+    recommendations: list[str] = Field(
         default_factory=list,
         description="Specific recommendations to address bottlenecks.",
     )
@@ -333,11 +336,11 @@ class SecurityProfile(BaseForgeModel):
         default=True,
         description="Secrets managed via environment variables / secrets manager.",
     )
-    compliance: List[str] = Field(
+    compliance: list[str] = Field(
         default_factory=list,
         description="Required compliance standards: ['GDPR', 'SOC2', 'HIPAA', ...].",
     )
-    additional_controls: List[str] = Field(
+    additional_controls: list[str] = Field(
         default_factory=list,
         description="Additional security controls: WAF, DDoS protection, audit logging, etc.",
     )

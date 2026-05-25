@@ -1,10 +1,9 @@
 """Environment Manager — provisions and tears down agent execution environments."""
+
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from system.execution.sandboxes.sandbox import Sandbox
 from system.observability.logging.logger import get_logger
@@ -18,16 +17,16 @@ class EnvironmentSpec:
     agent_type: str
     python_version: str = "3.12"
     node_version: str = "20"
-    extra_packages: List[str] = field(default_factory=list)
-    env_vars: Dict[str, str] = field(default_factory=dict)
-    base_project_path: Optional[str] = None
+    extra_packages: list[str] = field(default_factory=list)
+    env_vars: dict[str, str] = field(default_factory=dict)
+    base_project_path: str | None = None
 
 
 class EnvironmentManager:
     def __init__(self, workdir_base: str = "/tmp/forge-envs") -> None:
         self.workdir_base = Path(workdir_base)
         self.workdir_base.mkdir(parents=True, exist_ok=True)
-        self._active: Dict[str, Sandbox] = {}
+        self._active: dict[str, Sandbox] = {}
 
     async def provision(self, spec: EnvironmentSpec) -> Sandbox:
         task_dir = self.workdir_base / spec.task_id
@@ -54,7 +53,7 @@ class EnvironmentManager:
                 sandbox.destroy()
             logger.info("Environment torn down", task_id=task_id)
 
-    def get(self, task_id: str) -> Optional[Sandbox]:
+    def get(self, task_id: str) -> Sandbox | None:
         return self._active.get(task_id)
 
     async def teardown_all(self) -> None:

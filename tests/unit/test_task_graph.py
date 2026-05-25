@@ -1,7 +1,12 @@
 """Unit tests for Task Graph Engine — topological sort, cycle detection, critical path."""
-import pytest
+
 from datetime import datetime
-from system.shared.models import AgentType, TaskStatus, ExecutionPhase, Priority
+
+import pytest
+
+from system.shared.models import AgentType, ExecutionPhase, Priority, TaskStatus
+
+pytestmark = pytest.mark.unit
 
 
 def make_task(task_id: str, deps: list[str], agent: AgentType = AgentType.BACKEND) -> dict:
@@ -140,9 +145,16 @@ def test_task_status_enum():
 
 def test_agent_type_enum():
     """AgentType enum has all 8 specialized agents."""
-    agents = {AgentType.ARCHITECT, AgentType.BACKEND, AgentType.FRONTEND,
-              AgentType.INFRA, AgentType.QA, AgentType.SECURITY,
-              AgentType.DOCS, AgentType.REFACTOR}
+    agents = {
+        AgentType.ARCHITECT,
+        AgentType.BACKEND,
+        AgentType.FRONTEND,
+        AgentType.INFRA,
+        AgentType.QA,
+        AgentType.SECURITY,
+        AgentType.DOCS,
+        AgentType.REFACTOR,
+    }
     assert len(agents) == 8
 
 

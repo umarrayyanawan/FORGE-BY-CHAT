@@ -9,7 +9,8 @@ Exposes endpoints for:
 
 from __future__ import annotations
 
-from typing import Annotated, AsyncGenerator, List
+from collections.abc import AsyncGenerator
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,7 +121,10 @@ async def parse_intent(
         logger.error("unexpected_parse_error", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "Internal server error during intent parsing.", "code": "INTERNAL_ERROR"},
+            detail={
+                "error": "Internal server error during intent parsing.",
+                "code": "INTERNAL_ERROR",
+            },
         ) from exc
 
 
@@ -157,7 +161,10 @@ async def submit_clarification(
         logger.error("unexpected_clarify_error", error=str(exc), session_id=response.session_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": "Internal server error during clarification.", "code": "INTERNAL_ERROR"},
+            detail={
+                "error": "Internal server error during clarification.",
+                "code": "INTERNAL_ERROR",
+            },
         ) from exc
 
 
@@ -218,7 +225,7 @@ async def get_project_intent(
 
 @router.get(
     "/projects/{project_id}/sessions",
-    response_model=List[IntentSession],
+    response_model=list[IntentSession],
     status_code=status.HTTP_200_OK,
     summary="List all sessions for a project",
     description="Returns all intent sessions associated with a project, newest first.",
@@ -226,7 +233,7 @@ async def get_project_intent(
 async def list_project_sessions(
     project_id: str,
     persistence: Annotated[IntentPersistence, Depends(get_intent_persistence)],
-) -> List[IntentSession]:
+) -> list[IntentSession]:
     """List all sessions for a given project."""
     logger.debug("api_list_project_sessions", project_id=project_id)
     sessions = await persistence.list_sessions(project_id)

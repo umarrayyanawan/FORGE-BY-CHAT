@@ -52,12 +52,12 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     # Reliability settings
-    worker_prefetch_multiplier=1,       # fetch one task at a time — fairer scheduling
-    task_acks_late=True,                # ack only after completion — prevents silent loss
-    task_reject_on_worker_lost=True,    # re-queue if worker dies mid-task
-    task_track_started=True,            # report STARTED state to backend
+    worker_prefetch_multiplier=1,  # fetch one task at a time — fairer scheduling
+    task_acks_late=True,  # ack only after completion — prevents silent loss
+    task_reject_on_worker_lost=True,  # re-queue if worker dies mid-task
+    task_track_started=True,  # report STARTED state to backend
     # Result backend
-    result_expires=86400,               # keep results for 24 h
+    result_expires=86400,  # keep results for 24 h
     # Task routes — map task name patterns → specific queues
     task_routes={
         "forge.execute_agent_task": {"queue": TASK_QUEUE_DEFAULT},

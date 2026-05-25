@@ -1,9 +1,10 @@
 """FastAPI router for Monitoring Engine endpoints."""
+
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from system.core.monitoring.schemas import HealthSnapshot, MonitoringConfig, MonitoringReport
 
@@ -12,19 +13,24 @@ router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 def _get_engine() -> Any:
     from system.core.monitoring.engine import MonitoringEngine
+
     return MonitoringEngine()
 
 
 @router.post("/{project_id}/start", status_code=201)
-async def start_monitoring(project_id: str, config: MonitoringConfig) -> Dict[str, Any]:
+async def start_monitoring(project_id: str, config: MonitoringConfig) -> dict[str, Any]:
     """Start continuous health monitoring for a deployed project."""
     engine = _get_engine()
     await engine.start_monitoring(config)
-    return {"project_id": project_id, "status": "monitoring_started", "interval_seconds": config.check_interval_seconds}
+    return {
+        "project_id": project_id,
+        "status": "monitoring_started",
+        "interval_seconds": config.check_interval_seconds,
+    }
 
 
 @router.post("/{project_id}/stop")
-async def stop_monitoring(project_id: str) -> Dict[str, Any]:
+async def stop_monitoring(project_id: str) -> dict[str, Any]:
     """Stop monitoring for a project."""
     engine = _get_engine()
     await engine.stop_monitoring(project_id)

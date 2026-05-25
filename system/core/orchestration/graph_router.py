@@ -11,15 +11,13 @@ Endpoints:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import Field
-from redis.asyncio import Redis
 
 from system.core.orchestration.task_graph import TaskGraphEngine
 from system.core.orchestration.task_schemas import (
-    GenerateGraphRequest,
     GraphStatusSummary,
     TaskGraph,
     TaskGraphUpdate,
@@ -28,10 +26,8 @@ from system.core.orchestration.task_schemas import (
 from system.core.planning.schemas import ArchitecturePlan
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
-from system.shared.database import AsyncSessionLocal, get_db
-from system.shared.exceptions import NotFoundError, OrchestrationError, ValidationError
+from system.shared.exceptions import OrchestrationError, ValidationError
 from system.shared.models import BaseForgeModel
-from system.shared.redis_client import get_redis
 
 logger = get_logger(__name__)
 
@@ -58,7 +54,7 @@ class ReadyTasksResponse(BaseForgeModel):
     """Response for GET /tasks/{graph_id}/ready."""
 
     graph_id: str
-    ready_tasks: List[TaskNode]
+    ready_tasks: list[TaskNode]
     count: int
 
 
@@ -66,7 +62,7 @@ class CriticalPathResponse(BaseForgeModel):
     """Response for GET /tasks/{graph_id}/critical-path."""
 
     graph_id: str
-    critical_path: List[str]
+    critical_path: list[str]
     estimated_minutes: int
 
 
@@ -161,7 +157,7 @@ async def get_graph_status(graph_id: str) -> GraphStatusSummary:
 
 @router.put(
     "/{graph_id}/tasks/{task_id}",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
     summary="Update task status",
     description=(
         "Update the status, error message, or output artifacts of a single "
@@ -172,7 +168,7 @@ async def update_task_status(
     graph_id: str,
     task_id: str,
     update: TaskGraphUpdate,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Apply *update* to task *task_id* within graph *graph_id*."""
     if update.task_id != task_id:
         raise HTTPException(

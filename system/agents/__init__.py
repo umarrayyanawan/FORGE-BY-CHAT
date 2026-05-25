@@ -1,5 +1,6 @@
 """FORGE Agent Runtime — specialized autonomous agents with scoped execution."""
-from system.agents.base import BaseAgent, AgentContract, AgentContext, AgentResult
+
+from system.agents.base import AgentContext, AgentContract, AgentResult, BaseAgent
 from system.agents.registry import AgentRegistry, default_registry
 from system.agents.runner import AgentRunner
 

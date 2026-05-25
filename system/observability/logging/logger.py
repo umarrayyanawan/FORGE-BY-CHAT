@@ -17,31 +17,24 @@ from typing import Any
 import structlog
 from structlog.types import EventDict, Processor
 
-
 # ========================================================================== #
 # Internal helpers
 # ========================================================================== #
 
 
-def _add_service_name(
-    logger: Any, method: str, event_dict: EventDict
-) -> EventDict:
+def _add_service_name(logger: Any, method: str, event_dict: EventDict) -> EventDict:
     """Inject the service name into every log record."""
     event_dict.setdefault("service", "forge")
     return event_dict
 
 
-def _drop_color_message_key(
-    logger: Any, method: str, event_dict: EventDict
-) -> EventDict:
+def _drop_color_message_key(logger: Any, method: str, event_dict: EventDict) -> EventDict:
     """Remove the ``color_message`` key Uvicorn sometimes adds."""
     event_dict.pop("color_message", None)
     return event_dict
 
 
-def _extract_from_record(
-    logger: Any, method: str, event_dict: EventDict
-) -> EventDict:
+def _extract_from_record(logger: Any, method: str, event_dict: EventDict) -> EventDict:
     """Copy useful stdlib LogRecord fields into the structlog event dict."""
     record: logging.LogRecord | None = event_dict.get("_record")
     if record is not None:

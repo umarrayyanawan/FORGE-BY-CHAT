@@ -13,9 +13,8 @@ delegate actual subprocess execution to :class:`TerminalExecutor`.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+import uuid
 
 from system.observability.logging.logger import get_logger
 from system.tools.terminal.executor import ExecutionOutput, TerminalExecutor
@@ -33,12 +32,12 @@ class DeploymentResult:
     """Outcome of a deployment operation."""
 
     deployment_id: str
-    url: Optional[str]
+    url: str | None
     status: str  # "running" | "success" | "failed" | "partial"
-    health_url: Optional[str]
+    health_url: str | None
     rollback_available: bool = True
     logs: str = ""
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -50,7 +49,7 @@ class DockerDeployConfig:
     """Configuration for a Docker Compose deployment."""
 
     compose_file: str = "docker-compose.yml"
-    services: List[str] = field(default_factory=list)
+    services: list[str] = field(default_factory=list)
     env_file: str = ".env"
     project_dir: str = "."
     build: bool = False
@@ -69,7 +68,7 @@ class VercelDeployConfig:
     org_id: str = ""
     project_id: str = ""
     production: bool = False
-    env_vars: Dict[str, str] = field(default_factory=dict)
+    env_vars: dict[str, str] = field(default_factory=dict)
     timeout: int = 300
 
 
@@ -90,7 +89,7 @@ class KubernetesDeployConfig:
 
     namespace: str = "default"
     manifest_path: str = "k8s/"
-    context: Optional[str] = None
+    context: str | None = None
     timeout: int = 300
 
 
@@ -107,7 +106,7 @@ class DeploymentTool:
                   A default instance is created if not provided.
     """
 
-    def __init__(self, executor: Optional[TerminalExecutor] = None) -> None:
+    def __init__(self, executor: TerminalExecutor | None = None) -> None:
         self.executor = executor or TerminalExecutor()
 
     # ------------------------------------------------------------------ #
@@ -119,7 +118,7 @@ class DeploymentTool:
         """Generate a unique deployment ID with a readable prefix."""
         return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
-    def _extract_url_from_output(self, output: str, prefix: str = "https://") -> Optional[str]:
+    def _extract_url_from_output(self, output: str, prefix: str = "https://") -> str | None:
         """Scan command output for the first HTTPS URL."""
         for line in output.splitlines():
             stripped = line.strip()
@@ -148,8 +147,10 @@ class DeploymentTool:
         # Build the docker-compose command
         cmd_parts = [
             "docker-compose",
-            "-f", config.compose_file,
-            "--env-file", config.env_file,
+            "-f",
+            config.compose_file,
+            "--env-file",
+            config.env_file,
         ]
 
         cmd_parts.append("up")
@@ -184,7 +185,7 @@ class DeploymentTool:
             )
 
             status = "running" if result.exit_code == 0 else "failed"
-            error: Optional[str] = None
+            error: str | None = None
             if result.exit_code != 0:
                 error = result.stderr[:500] or result.stdout[:500]
 
@@ -207,7 +208,9 @@ class DeploymentTool:
                 error=error,
             )
         except Exception as exc:
-            logger.error("Docker Compose deployment failed", deployment_id=deployment_id, error=str(exc))
+            logger.error(
+                "Docker Compose deployment failed", deployment_id=deployment_id, error=str(exc)
+            )
             return DeploymentResult(
                 deployment_id=deployment_id,
                 url=None,
@@ -291,7 +294,7 @@ class DeploymentTool:
             url = self._extract_url_from_output(result.stdout)
 
             status = "success" if result.exit_code == 0 else "failed"
-            error: Optional[str] = None
+            error: str | None = None
             if result.exit_code != 0:
                 error = result.stderr[:500] or result.stdout[:500]
 
@@ -395,7 +398,7 @@ class DeploymentTool:
             # Railway CLI outputs the deployment URL on a line starting with https://
             url = self._extract_url_from_output(result.stdout)
             status = "success" if result.exit_code == 0 else "failed"
-            error: Optional[str] = None
+            error: str | None = None
             if result.exit_code != 0:
                 error = result.stderr[:500] or result.stdout[:500]
 
@@ -471,8 +474,7 @@ class DeploymentTool:
 
         context_flag = f"--context {config.context}" if config.context else ""
         cmd = (
-            f"kubectl apply -f {config.manifest_path} "
-            f"--namespace {config.namespace} {context_flag}"
+            f"kubectl apply -f {config.manifest_path} --namespace {config.namespace} {context_flag}"
         ).strip()
 
         logger.info(

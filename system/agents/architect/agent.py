@@ -8,9 +8,9 @@ and internally consistent.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from system.agents.base import AgentContract, AgentContext, AgentResult, BaseAgent
+from system.agents.base import AgentContext, AgentContract, AgentResult, BaseAgent
 from system.agents.prompts import (
     ARCHITECT_SYSTEM_PROMPT_TEMPLATE,
     FILE_OUTPUT_FORMAT,
@@ -60,8 +60,8 @@ class ArchitectAgent(BaseAgent):
     def build_contract(
         self,
         task: TaskNode,
-        spec: Optional[ProjectSpec],
-        arch: Optional[ArchitecturePlan],
+        spec: ProjectSpec | None,
+        arch: ArchitecturePlan | None,
     ) -> AgentContract:
         """Build a scoped AgentContract for an architecture task.
 

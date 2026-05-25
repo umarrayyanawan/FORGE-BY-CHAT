@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from system.observability.logging.logger import get_logger
 from system.shared.constants import DEFAULT_LLM_MODEL, DEFAULT_LLM_TEMPERATURE
 from system.shared.exceptions import IntentError
-from system.shared.llm_client import LLMMessage, LLMResponse, get_llm_client
+from system.shared.llm_client import LLMMessage, LLMResponse
 
 from .schemas import IntentStatus, ProjectIntent
 
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 # small bonus.
 # =========================================================================== #
 
-_FIELD_WEIGHTS: List[Tuple[str, float]] = [
+_FIELD_WEIGHTS: list[tuple[str, float]] = [
     ("industry", 0.15),
     ("product_type", 0.15),
     ("core_features", 0.20),
@@ -95,7 +95,7 @@ class IntentParser:
         system_prompt = self._build_parse_prompt(prompt)
 
         try:
-            messages: List[LLMMessage] = [
+            messages: list[LLMMessage] = [
                 LLMMessage(role="user", content=prompt),
             ]
             response: LLMResponse = await self._llm.complete(
@@ -227,7 +227,7 @@ The JSON must match this exact schema:
         json_str = self._extract_json(raw)
 
         try:
-            data: Dict[str, Any] = json.loads(json_str)
+            data: dict[str, Any] = json.loads(json_str)
         except json.JSONDecodeError as exc:
             self._log.warning(
                 "json_parse_failed",
@@ -267,12 +267,16 @@ The JSON must match this exact schema:
 
         return text.strip()
 
-    def _lenient_parse(self, data: Dict[str, Any], prompt: str) -> ProjectIntent:
+    def _lenient_parse(self, data: dict[str, Any], prompt: str) -> ProjectIntent:
         """Build a ProjectIntent from partially valid data, skipping bad fields."""
-        safe: Dict[str, Any] = {"raw_prompt": prompt}
+        safe: dict[str, Any] = {"raw_prompt": prompt}
         string_fields = [
-            "industry", "product_type", "scale_requirements",
-            "target_users", "timeline", "budget_range",
+            "industry",
+            "product_type",
+            "scale_requirements",
+            "target_users",
+            "timeline",
+            "budget_range",
         ]
         for field in string_fields:
             val = data.get(field)
@@ -315,9 +319,9 @@ The JSON must match this exact schema:
                 score += weight
         return round(min(score, 1.0), 4)
 
-    def _identify_missing_fields(self, intent: ProjectIntent) -> List[str]:
+    def _identify_missing_fields(self, intent: ProjectIntent) -> list[str]:
         """Return names of important fields that are empty or default."""
-        missing: List[str] = []
+        missing: list[str] = []
         for field_name, _ in _FIELD_WEIGHTS:
             val = getattr(intent, field_name, None)
             if not self._field_is_populated(field_name, val):

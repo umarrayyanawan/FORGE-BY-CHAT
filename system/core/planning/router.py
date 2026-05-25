@@ -9,8 +9,6 @@ Tags:   architecture
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +47,7 @@ class PlanResponse(BaseForgeModel):
     service_count: int
     infra_component_count: int
     deployment_target: str
-    estimated_monthly_cost_usd: Optional[float] = None
+    estimated_monthly_cost_usd: float | None = None
     plan: ArchitecturePlan
 
 
@@ -66,7 +64,7 @@ class ADRResponse(BaseForgeModel):
 
     project_id: str
     plan_id: str
-    adrs: List[str]  # adr_notes strings from the plan
+    adrs: list[str]  # adr_notes strings from the plan
 
 
 # ========================================================================== #

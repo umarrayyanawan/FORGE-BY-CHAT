@@ -16,9 +16,9 @@ Usage::
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any
 
 from system.core.orchestration.task_schemas import TaskGraph, TaskNode
 from system.observability.logging.logger import get_logger
@@ -56,13 +56,13 @@ class ExecutionState:
 
     project_id: str
     phase: ExecutionPhase = ExecutionPhase.INTENT
-    active_tasks: List[str] = field(default_factory=list)
-    completed_tasks: List[str] = field(default_factory=list)
-    failed_tasks: List[str] = field(default_factory=list)
-    blocked_tasks: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    active_tasks: list[str] = field(default_factory=list)
+    completed_tasks: list[str] = field(default_factory=list)
+    failed_tasks: list[str] = field(default_factory=list)
+    blocked_tasks: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_redis_dict(self) -> Dict[str, str]:
+    def to_redis_dict(self) -> dict[str, str]:
         """Serialise to a flat dict suitable for HSET."""
         return {
             _FIELD_PHASE: self.phase if isinstance(self.phase, str) else self.phase.value,
@@ -74,7 +74,7 @@ class ExecutionState:
         }
 
     @classmethod
-    def from_redis_dict(cls, project_id: str, data: Dict[str, str]) -> "ExecutionState":
+    def from_redis_dict(cls, project_id: str, data: dict[str, str]) -> ExecutionState:
         """Deserialise from a flat dict returned by HGETALL."""
         return cls(
             project_id=project_id,
@@ -102,9 +102,7 @@ class StateManager:
     # Initialisation
     # ------------------------------------------------------------------
 
-    async def initialize_state(
-        self, project_id: str, graph: TaskGraph
-    ) -> None:
+    async def initialize_state(self, project_id: str, graph: TaskGraph) -> None:
         """Create a fresh ExecutionState for a project in Redis.
 
         All tasks start as PENDING; no active / completed / failed tasks.
@@ -138,7 +136,7 @@ class StateManager:
         Returns a blank state if no record exists (first-time access).
         """
         key = _state_key(project_id)
-        data: Dict[str, str] = await self._redis.hgetall(key)
+        data: dict[str, str] = await self._redis.hgetall(key)
         if not data:
             logger.warning(
                 "No execution state found — returning blank state",
@@ -147,9 +145,7 @@ class StateManager:
             return ExecutionState(project_id=project_id)
         # Redis may return bytes; decode if necessary
         decoded = {
-            (k.decode() if isinstance(k, bytes) else k): (
-                v.decode() if isinstance(v, bytes) else v
-            )
+            (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
             for k, v in data.items()
         }
         return ExecutionState.from_redis_dict(project_id, decoded)
@@ -169,9 +165,7 @@ class StateManager:
     # Task lifecycle mutations
     # ------------------------------------------------------------------
 
-    async def mark_task_running(
-        self, project_id: str, task_id: str
-    ) -> None:
+    async def mark_task_running(self, project_id: str, task_id: str) -> None:
         """Move *task_id* to the active_tasks list."""
         state = await self.get_state(project_id)
         # Remove from any other list
@@ -187,7 +181,7 @@ class StateManager:
         self,
         project_id: str,
         task_id: str,
-        artifacts: List[str],
+        artifacts: list[str],
     ) -> None:
         """Move *task_id* from active → completed and record artifacts."""
         state = await self.get_state(project_id)
@@ -240,9 +234,7 @@ class StateManager:
             error=error[:200],
         )
 
-    async def mark_task_blocked(
-        self, project_id: str, task_id: str
-    ) -> None:
+    async def mark_task_blocked(self, project_id: str, task_id: str) -> None:
         """Move *task_id* to blocked_tasks."""
         state = await self.get_state(project_id)
         for lst in (state.active_tasks, state.completed_tasks, state.failed_tasks):
@@ -257,9 +249,7 @@ class StateManager:
     # Readiness
     # ------------------------------------------------------------------
 
-    async def get_ready_tasks(
-        self, project_id: str, graph: TaskGraph
-    ) -> List[TaskNode]:
+    async def get_ready_tasks(self, project_id: str, graph: TaskGraph) -> list[TaskNode]:
         """Return tasks whose dependencies are all completed and are still PENDING.
 
         A task is ready when:
@@ -274,7 +264,7 @@ class StateManager:
             | set(state.failed_tasks)
             | set(state.blocked_tasks)
         )
-        ready: List[TaskNode] = []
+        ready: list[TaskNode] = []
         for task in graph.tasks:
             if task.task_id in in_flight:
                 continue
@@ -317,9 +307,7 @@ class StateManager:
     # Progress
     # ------------------------------------------------------------------
 
-    async def get_progress(
-        self, project_id: str, graph: TaskGraph
-    ) -> Dict[str, Any]:
+    async def get_progress(self, project_id: str, graph: TaskGraph) -> dict[str, Any]:
         """Return a progress summary dict.
 
         Keys: total, completed, failed, active, blocked, percent_complete.
@@ -358,9 +346,7 @@ class StateManager:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _save_lists(
-        self, project_id: str, state: ExecutionState
-    ) -> None:
+    async def _save_lists(self, project_id: str, state: ExecutionState) -> None:
         """Persist the mutable list fields of state back to Redis."""
         key = _state_key(project_id)
         await self._redis.hset(

@@ -1,8 +1,9 @@
 """Metrics collector — gathers health signals from deployed endpoints."""
+
 from __future__ import annotations
 
 import time
-from typing import Any, List, Optional
+from typing import Any
 
 import httpx
 
@@ -13,16 +14,16 @@ logger = get_logger(__name__)
 
 
 class MetricsCollector:
-    def __init__(self, http_client: Optional[Any] = None, timeout: float = 10.0) -> None:
+    def __init__(self, http_client: Any | None = None, timeout: float = 10.0) -> None:
         self.timeout = timeout
         self._client = http_client
 
     async def collect_health(self, config: MonitoringConfig) -> HealthSnapshot:
         start = time.monotonic()
         status = "healthy"
-        status_code: Optional[int] = None
-        error: Optional[str] = None
-        metrics: List[MetricSample] = []
+        status_code: int | None = None
+        error: str | None = None
+        metrics: list[MetricSample] = []
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -36,7 +37,9 @@ class MetricsCollector:
                     status = "degraded"
 
                 metrics = [
-                    MetricSample(metric_name="http_response_time_ms", value=round(elapsed_ms, 2), unit="ms"),
+                    MetricSample(
+                        metric_name="http_response_time_ms", value=round(elapsed_ms, 2), unit="ms"
+                    ),
                     MetricSample(metric_name="http_status_code", value=float(status_code)),
                 ]
 
@@ -74,13 +77,18 @@ class MetricsCollector:
             metrics=metrics,
         )
 
-    async def collect_system_metrics(self, project_id: str) -> List[MetricSample]:
+    async def collect_system_metrics(self, project_id: str) -> list[MetricSample]:
         try:
             import psutil
+
             return [
                 MetricSample(metric_name="cpu_percent", value=psutil.cpu_percent(), unit="%"),
-                MetricSample(metric_name="memory_percent", value=psutil.virtual_memory().percent, unit="%"),
-                MetricSample(metric_name="disk_percent", value=psutil.disk_usage("/").percent, unit="%"),
+                MetricSample(
+                    metric_name="memory_percent", value=psutil.virtual_memory().percent, unit="%"
+                ),
+                MetricSample(
+                    metric_name="disk_percent", value=psutil.disk_usage("/").percent, unit="%"
+                ),
             ]
         except ImportError:
             return []

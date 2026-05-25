@@ -10,7 +10,7 @@ Creates File nodes, CodeChunk nodes, and the relationships between them:
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.observability.logging.logger import get_logger
 from system.repo_intelligence.schemas import (
@@ -18,7 +18,6 @@ from system.repo_intelligence.schemas import (
     DependencyEdge,
     FileNode,
 )
-from system.shared.exceptions import RepoIntelligenceError
 from system.shared.neo4j_client import NeoDB
 
 logger = get_logger(__name__)
@@ -55,7 +54,7 @@ class GraphBuilder:
     async def build_project_graph(
         self,
         project_id: str,
-        chunks: List[CodeChunk],
+        chunks: list[CodeChunk],
     ) -> None:
         """Build the full project dependency graph from parsed chunks.
 
@@ -69,7 +68,7 @@ class GraphBuilder:
         await self.ensure_constraints()
 
         # Group chunks by file
-        files_seen: Dict[str, List[CodeChunk]] = {}
+        files_seen: dict[str, list[CodeChunk]] = {}
         for chunk in chunks:
             files_seen.setdefault(chunk.file_path, []).append(chunk)
 
@@ -169,9 +168,7 @@ class GraphBuilder:
     # Edge creation
     # ------------------------------------------------------------------
 
-    async def _create_contains_edge(
-        self, project_id: str, file_path: str, chunk_id: str
-    ) -> None:
+    async def _create_contains_edge(self, project_id: str, file_path: str, chunk_id: str) -> None:
         cypher = """
         MATCH (f:ForgeFile {project_id: $project_id, path: $file_path})
         MATCH (c:ForgeChunk {chunk_id: $chunk_id, project_id: $project_id})
@@ -186,9 +183,7 @@ class GraphBuilder:
             },
         )
 
-    async def create_dependency_edge(
-        self, project_id: str, edge: DependencyEdge
-    ) -> None:
+    async def create_dependency_edge(self, project_id: str, edge: DependencyEdge) -> None:
         """Create an IMPORTS / EXTENDS / IMPLEMENTS / USES edge between files."""
         rel_type_map = {
             "import": "IMPORTS",
@@ -200,8 +195,7 @@ class GraphBuilder:
 
         # Merge target file node even if it's external (no chunk_count)
         await self._db.run_query(
-            "MERGE (f:ForgeFile {project_id: $pid, path: $path}) "
-            "ON CREATE SET f.external = true",
+            "MERGE (f:ForgeFile {project_id: $pid, path: $path}) ON CREATE SET f.external = true",
             {"pid": project_id, "path": edge.to_file},
         )
 
@@ -226,22 +220,18 @@ class GraphBuilder:
     # Query methods
     # ------------------------------------------------------------------
 
-    async def get_file_dependencies(
-        self, project_id: str, file_path: str
-    ) -> List[str]:
+    async def get_file_dependencies(self, project_id: str, file_path: str) -> list[str]:
         """Return direct dependency file paths for *file_path*."""
         cypher = """
         MATCH (f:ForgeFile {project_id: $pid, path: $path})-[:IMPORTS]->(dep:ForgeFile)
         RETURN dep.path AS dep_path
         """
-        records = await self._db.run_query(
-            cypher, {"pid": project_id, "path": file_path}
-        )
+        records = await self._db.run_query(cypher, {"pid": project_id, "path": file_path})
         return [r["dep_path"] for r in records if r.get("dep_path")]
 
     async def get_transitive_dependencies(
         self, project_id: str, file_path: str, depth: int = 3
-    ) -> List[str]:
+    ) -> list[str]:
         """Return all transitive dependency paths up to *depth* hops."""
         depth = min(max(1, depth), 10)
         cypher = f"""
@@ -249,12 +239,10 @@ class GraphBuilder:
               -[:IMPORTS*1..{depth}]->(dep:ForgeFile)
         RETURN DISTINCT dep.path AS dep_path
         """
-        records = await self._db.run_query(
-            cypher, {"pid": project_id, "path": file_path}
-        )
+        records = await self._db.run_query(cypher, {"pid": project_id, "path": file_path})
         return [r["dep_path"] for r in records if r.get("dep_path")]
 
-    async def find_cycles(self, project_id: str) -> List[List[str]]:
+    async def find_cycles(self, project_id: str) -> list[list[str]]:
         """Detect circular dependency chains in the project graph."""
         cypher = """
         MATCH path = (f:ForgeFile {project_id: $pid})-[:IMPORTS*2..10]->(f)
@@ -262,7 +250,7 @@ class GraphBuilder:
         LIMIT 50
         """
         records = await self._db.run_query(cypher, {"pid": project_id})
-        cycles: List[List[str]] = []
+        cycles: list[list[str]] = []
         seen: set = set()
         for r in records:
             cycle = r.get("cycle", [])
@@ -273,21 +261,17 @@ class GraphBuilder:
                     cycles.append(cycle)
         return cycles
 
-    async def get_impact_set(
-        self, project_id: str, file_path: str
-    ) -> List[str]:
+    async def get_impact_set(self, project_id: str, file_path: str) -> list[str]:
         """Return all files that import (directly or transitively) *file_path*."""
         cypher = """
         MATCH (dep:ForgeFile {project_id: $pid, path: $path})
               <-[:IMPORTS*1..10]-(importer:ForgeFile)
         RETURN DISTINCT importer.path AS imp_path
         """
-        records = await self._db.run_query(
-            cypher, {"pid": project_id, "path": file_path}
-        )
+        records = await self._db.run_query(cypher, {"pid": project_id, "path": file_path})
         return [r["imp_path"] for r in records if r.get("imp_path")]
 
-    async def get_architecture_overview(self, project_id: str) -> Dict[str, Any]:
+    async def get_architecture_overview(self, project_id: str) -> dict[str, Any]:
         """Return a high-level summary of the project graph."""
         stats_cypher = """
         MATCH (f:ForgeFile {project_id: $pid})
@@ -327,8 +311,7 @@ class GraphBuilder:
             "dependency_count": s.get("dep_count", 0),
             "entry_points": [r["path"] for r in entry_records],
             "most_imported": [
-                {"path": r["path"], "import_count": r["import_count"]}
-                for r in hub_records
+                {"path": r["path"], "import_count": r["import_count"]} for r in hub_records
             ],
         }
 
@@ -339,9 +322,7 @@ class GraphBuilder:
             {"pid": project_id},
         )
 
-    async def get_chunk_by_file(
-        self, project_id: str, file_path: str
-    ) -> List[Dict[str, Any]]:
+    async def get_chunk_by_file(self, project_id: str, file_path: str) -> list[dict[str, Any]]:
         """Return chunk metadata for all chunks in a file."""
         cypher = """
         MATCH (f:ForgeFile {project_id: $pid, path: $path})-[:CONTAINS]->(c:ForgeChunk)
@@ -349,6 +330,4 @@ class GraphBuilder:
                c.start_line AS start_line, c.end_line AS end_line
         ORDER BY c.start_line
         """
-        return await self._db.run_query(
-            cypher, {"pid": project_id, "path": file_path}
-        )
+        return await self._db.run_query(cypher, {"pid": project_id, "path": file_path})

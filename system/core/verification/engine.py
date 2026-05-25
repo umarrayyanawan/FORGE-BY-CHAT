@@ -1,19 +1,19 @@
 """Verification Engine — orchestrates all validation steps for generated projects."""
+
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+from system.core.verification.architecture_validator import ArchitectureValidator
+from system.core.verification.runtime_validator import RuntimeValidator
 from system.core.verification.schemas import (
-    ValidationCheck,
+    SelfHealingAttempt,
     ValidationStatus,
     VerificationReport,
-    SelfHealingAttempt,
 )
-from system.core.verification.static_validator import StaticValidator
-from system.core.verification.runtime_validator import RuntimeValidator
-from system.core.verification.architecture_validator import ArchitectureValidator
 from system.core.verification.self_healing import SelfHealingEngine
+from system.core.verification.static_validator import StaticValidator
 from system.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,10 +22,10 @@ logger = get_logger(__name__)
 class VerificationEngine:
     def __init__(
         self,
-        static: Optional[StaticValidator] = None,
-        runtime: Optional[RuntimeValidator] = None,
-        architecture: Optional[ArchitectureValidator] = None,
-        healer: Optional[SelfHealingEngine] = None,
+        static: StaticValidator | None = None,
+        runtime: RuntimeValidator | None = None,
+        architecture: ArchitectureValidator | None = None,
+        healer: SelfHealingEngine | None = None,
         db: Any = None,
     ) -> None:
         self.static = static or StaticValidator()
@@ -33,7 +33,7 @@ class VerificationEngine:
         self.architecture = architecture or ArchitectureValidator()
         self.healer = healer or SelfHealingEngine()
         self.db = db
-        self._reports: Dict[str, VerificationReport] = {}
+        self._reports: dict[str, VerificationReport] = {}
 
     async def verify(
         self,
@@ -50,7 +50,7 @@ class VerificationEngine:
         runtime_checks = await self.runtime.validate(project_path)
 
         all_checks = static_checks + arch_checks + runtime_checks
-        healing_log: List[SelfHealingAttempt] = []
+        healing_log: list[SelfHealingAttempt] = []
 
         if auto_heal:
             failed = [c for c in all_checks if c.status == ValidationStatus.FAILED]
@@ -60,7 +60,9 @@ class VerificationEngine:
                 if attempt.succeeded:
                     check.status = ValidationStatus.HEALED
 
-        passed = sum(1 for c in all_checks if c.status in (ValidationStatus.PASSED, ValidationStatus.HEALED))
+        passed = sum(
+            1 for c in all_checks if c.status in (ValidationStatus.PASSED, ValidationStatus.HEALED)
+        )
         failed_count = sum(1 for c in all_checks if c.status == ValidationStatus.FAILED)
         overall = ValidationStatus.PASSED if failed_count == 0 else ValidationStatus.FAILED
 
@@ -83,8 +85,8 @@ class VerificationEngine:
         )
         return report
 
-    async def get_report(self, report_id: str) -> Optional[VerificationReport]:
+    async def get_report(self, report_id: str) -> VerificationReport | None:
         return self._reports.get(report_id)
 
-    async def get_project_reports(self, project_id: str) -> List[VerificationReport]:
+    async def get_project_reports(self, project_id: str) -> list[VerificationReport]:
         return [r for r in self._reports.values() if r.project_id == project_id]

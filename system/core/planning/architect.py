@@ -16,21 +16,17 @@ Usage::
 
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from system.core.planning.schemas import (
     InfrastructurePlan,
     RepoTopology,
     ScalabilityProfile,
     SecurityProfile,
-    ServiceDefinition,
 )
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
-from system.shared.llm_client import LLMMessage
-from system.shared.models import DeployTarget
 
 logger = get_logger(__name__)
 
@@ -38,7 +34,7 @@ logger = get_logger(__name__)
 # Cloud service mappings per provider
 # ---------------------------------------------------------------------------
 
-_AWS_SERVICES: Dict[str, str] = {
+_AWS_SERVICES: dict[str, str] = {
     "database": "RDS (PostgreSQL)",
     "cache": "ElastiCache (Redis)",
     "queue": "SQS / ElastiMQ",
@@ -53,7 +49,7 @@ _AWS_SERVICES: Dict[str, str] = {
     "registry": "ECR",
 }
 
-_GCP_SERVICES: Dict[str, str] = {
+_GCP_SERVICES: dict[str, str] = {
     "database": "Cloud SQL (PostgreSQL)",
     "cache": "Memorystore (Redis)",
     "queue": "Pub/Sub",
@@ -68,7 +64,7 @@ _GCP_SERVICES: Dict[str, str] = {
     "registry": "Artifact Registry",
 }
 
-_AZURE_SERVICES: Dict[str, str] = {
+_AZURE_SERVICES: dict[str, str] = {
     "database": "Azure Database for PostgreSQL",
     "cache": "Azure Cache for Redis",
     "queue": "Azure Service Bus",
@@ -83,7 +79,7 @@ _AZURE_SERVICES: Dict[str, str] = {
     "registry": "Azure Container Registry",
 }
 
-_SELF_HOSTED_SERVICES: Dict[str, str] = {
+_SELF_HOSTED_SERVICES: dict[str, str] = {
     "database": "PostgreSQL (self-hosted)",
     "cache": "Redis (self-hosted)",
     "queue": "RabbitMQ / Redis",
@@ -96,7 +92,7 @@ _SELF_HOSTED_SERVICES: Dict[str, str] = {
     "registry": "Harbor / Docker Registry",
 }
 
-_PROVIDER_MAP: Dict[str, Dict[str, str]] = {
+_PROVIDER_MAP: dict[str, dict[str, str]] = {
     "aws": _AWS_SERVICES,
     "gcp": _GCP_SERVICES,
     "azure": _AZURE_SERVICES,
@@ -108,7 +104,7 @@ _PROVIDER_MAP: Dict[str, Dict[str, str]] = {
 }
 
 # Monthly cost estimates (USD) per service class, per provider
-_COST_ESTIMATES: Dict[str, Dict[str, float]] = {
+_COST_ESTIMATES: dict[str, dict[str, float]] = {
     "aws": {
         "RDS (PostgreSQL)": 150.0,
         "ElastiCache (Redis)": 80.0,
@@ -148,9 +144,7 @@ class ArchitecturePlanner:
     # Infrastructure Plan
     # ------------------------------------------------------------------
 
-    async def plan_infra(
-        self, spec: ProjectSpec, stack: Dict[str, str]
-    ) -> InfrastructurePlan:
+    async def plan_infra(self, spec: ProjectSpec, stack: dict[str, str]) -> InfrastructurePlan:
         """Generate a cloud infrastructure plan from spec and stack.
 
         Determines cloud provider from spec.intent.deployment_target,
@@ -162,7 +156,7 @@ class ArchitecturePlanner:
         services_map = _PROVIDER_MAP[provider_key]
 
         # Always required
-        required_services: List[str] = [
+        required_services: list[str] = [
             services_map["database"],
             services_map["cache"],
             services_map["lb"],
@@ -196,7 +190,7 @@ class ArchitecturePlanner:
 
         # Deduplicate while preserving order
         seen: set = set()
-        unique_services: List[str] = []
+        unique_services: list[str] = []
         for svc in required_services:
             if svc not in seen:
                 seen.add(svc)
@@ -204,7 +198,7 @@ class ArchitecturePlanner:
 
         # Cost estimation
         cost_table = _COST_ESTIMATES.get(provider_key, _COST_ESTIMATES["aws"])
-        cost_breakdown: Dict[str, float] = {}
+        cost_breakdown: dict[str, float] = {}
         total_cost = 0.0
         for svc in unique_services:
             cost = cost_table.get(svc, 20.0)  # default $20 for unknown
@@ -224,7 +218,7 @@ class ArchitecturePlanner:
             elif provider_key == "gcp":
                 regions = ["us-central1", "europe-west1"]
 
-        notes: List[str] = []
+        notes: list[str] = []
         if is_ha:
             notes.append("Multi-AZ deployment configured for high availability.")
         if total_cost > 1000:
@@ -256,7 +250,7 @@ class ArchitecturePlanner:
     # ------------------------------------------------------------------
 
     async def assess_scalability(
-        self, spec: ProjectSpec, stack: Dict[str, str]
+        self, spec: ProjectSpec, stack: dict[str, str]
     ) -> ScalabilityProfile:
         """Parse scale requirements and return a ScalabilityProfile."""
         scale_text = (spec.intent.scale_requirements or "").lower()
@@ -287,8 +281,8 @@ class ArchitecturePlanner:
             data_gb = 10.0
 
         # Identify bottlenecks
-        bottlenecks: List[str] = []
-        recommendations: List[str] = []
+        bottlenecks: list[str] = []
+        recommendations: list[str] = []
 
         if rps > 1000:
             bottlenecks.append("Database connection pool saturation at high RPS")
@@ -329,7 +323,9 @@ class ArchitecturePlanner:
             db_scaling = "read-replicas"
         elif "sharding" in scale_text or "million" in scale_text:
             db_scaling = "read-replicas"
-            recommendations.append("Consider CQRS pattern for extreme read/write split requirements")
+            recommendations.append(
+                "Consider CQRS pattern for extreme read/write split requirements"
+            )
         else:
             db_scaling = "vertical"
 
@@ -376,7 +372,7 @@ class ArchitecturePlanner:
             auth_method = "JWT"
 
         # Compliance
-        compliance: List[str] = []
+        compliance: list[str] = []
         compliance_checks = {
             "gdpr": "GDPR",
             "hipaa": "HIPAA",
@@ -392,7 +388,7 @@ class ArchitecturePlanner:
                 compliance.append(label)
 
         # Additional controls
-        additional: List[str] = []
+        additional: list[str] = []
         if any(kw in combined for kw in ["mfa", "2fa", "two-factor", "multi-factor"]):
             additional.append("Multi-factor authentication (MFA/TOTP)")
         if any(kw in combined for kw in ["waf", "web application firewall"]):
@@ -435,14 +431,14 @@ class ArchitecturePlanner:
     # ------------------------------------------------------------------
 
     async def generate_adr(
-        self, decisions: List[str], stack: Dict[str, str]
-    ) -> List[Dict[str, str]]:
+        self, decisions: list[str], stack: dict[str, str]
+    ) -> list[dict[str, str]]:
         """Generate one ADR per major stack choice.
 
         Returns a list of dicts with keys:
             title, context, decision, rationale, status
         """
-        adrs: List[Dict[str, str]] = []
+        adrs: list[dict[str, str]] = []
 
         # ADR per stack layer
         adr_templates = [
@@ -574,7 +570,7 @@ class ArchitecturePlanner:
 
         Returns a complete mermaid diagram string ready to embed in markdown.
         """
-        lines: List[str] = ["graph TD"]
+        lines: list[str] = ["graph TD"]
 
         # Style definitions
         lines.append("    classDef backend fill:#dbeafe,stroke:#2563eb,color:#1e3a5f")
@@ -586,7 +582,7 @@ class ArchitecturePlanner:
         lines.append("")
 
         # Build node definitions
-        node_ids: Dict[str, str] = {}
+        node_ids: dict[str, str] = {}
         type_class_map = {
             "backend": "backend",
             "frontend": "frontend",

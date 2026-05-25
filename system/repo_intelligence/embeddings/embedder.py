@@ -8,12 +8,9 @@ search.
 from __future__ import annotations
 
 import asyncio
-import time
-from typing import List, Optional
 
 import openai
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from system.config.settings import settings
 from system.observability.logging.logger import get_logger
@@ -85,21 +82,21 @@ class CodeEmbedder:
     # Embedding generation
     # ------------------------------------------------------------------
 
-    async def embed_chunk(self, chunk: CodeChunk) -> List[float]:
+    async def embed_chunk(self, chunk: CodeChunk) -> list[float]:
         """Embed a single CodeChunk and return the vector."""
         text_input = self._prepare_chunk_text(chunk)
         return await self._embed_text(text_input)
 
     async def embed_chunks_batch(
         self,
-        chunks: List[CodeChunk],
+        chunks: list[CodeChunk],
         batch_size: int = 100,
-    ) -> List[List[float]]:
+    ) -> list[list[float]]:
         """Embed many chunks in batches, respecting API rate limits.
 
         Returns a list of float vectors in the same order as *chunks*.
         """
-        all_embeddings: List[List[float]] = []
+        all_embeddings: list[list[float]] = []
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i : i + batch_size]
             texts = [self._prepare_chunk_text(c) for c in batch]
@@ -110,7 +107,7 @@ class CodeEmbedder:
                 await asyncio.sleep(0.5)
         return all_embeddings
 
-    async def embed_query(self, query: str) -> List[float]:
+    async def embed_query(self, query: str) -> list[float]:
         """Embed a plain-text search query."""
         return await self._embed_text(query)
 
@@ -165,11 +162,11 @@ class CodeEmbedder:
 
     async def similarity_search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         project_id: str,
         limit: int = 10,
         threshold: float = MEMORY_SIMILARITY_THRESHOLD,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Return chunks closest to *query_embedding* within the project.
 
         Args:
@@ -216,7 +213,7 @@ class CodeEmbedder:
             )
             rows = result.fetchall()
 
-        search_results: List[SearchResult] = []
+        search_results: list[SearchResult] = []
         for row in rows:
             chunk = CodeChunk(
                 chunk_id=row.chunk_id,
@@ -266,7 +263,7 @@ class CodeEmbedder:
         parts.append(chunk.content)
         return "\n".join(parts)
 
-    async def _embed_text(self, text_input: str) -> List[float]:
+    async def _embed_text(self, text_input: str) -> list[float]:
         """Call the OpenAI embeddings endpoint for a single string."""
         try:
             response = await self._client.embeddings.create(
@@ -284,7 +281,7 @@ class CodeEmbedder:
                 details={"model": self._model},
             )
 
-    async def _embed_texts_batch(self, texts: List[str]) -> List[List[float]]:
+    async def _embed_texts_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts in a single API call."""
         truncated = [t[:8191] for t in texts]
         try:

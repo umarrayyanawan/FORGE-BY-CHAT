@@ -16,15 +16,9 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from system.core.intent.schemas import ProjectIntent
-from system.core.planning.schemas import (
-    ArchitecturePlan,
-    InfraComponent,
-    SecurityArchitecture,
-    ServiceDefinition,
-)
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
 from system.shared.llm_client import LLMMessage
@@ -35,7 +29,7 @@ logger = get_logger(__name__)
 # Canonical stack presets keyed by primary use-case
 # ---------------------------------------------------------------------------
 
-RULE_BASED_STACK: Dict[str, Dict[str, str]] = {
+RULE_BASED_STACK: dict[str, dict[str, str]] = {
     "e-commerce": {
         "backend": "FastAPI",
         "frontend": "Next.js",
@@ -122,7 +116,7 @@ RULE_BASED_STACK: Dict[str, Dict[str, str]] = {
 }
 
 # keyword → preset key mapping
-_KEYWORD_MAP: Dict[str, str] = {
+_KEYWORD_MAP: dict[str, str] = {
     "shop": "e-commerce",
     "store": "e-commerce",
     "commerce": "e-commerce",
@@ -200,9 +194,7 @@ class StackRecommender:
     # Public API
     # ------------------------------------------------------------------
 
-    async def recommend(
-        self, intent: ProjectIntent, spec: ProjectSpec
-    ) -> Dict[str, str]:
+    async def recommend(self, intent: ProjectIntent, spec: ProjectSpec) -> dict[str, str]:
         """Return the recommended technology stack for *intent* and *spec*.
 
         Returns a dict with keys:
@@ -236,7 +228,7 @@ class StackRecommender:
     # Rule-based matching
     # ------------------------------------------------------------------
 
-    def _apply_rules(self, intent: ProjectIntent) -> tuple[Dict[str, str], float]:
+    def _apply_rules(self, intent: ProjectIntent) -> tuple[dict[str, str], float]:
         """Return (matched_stack, confidence) using keyword matching.
 
         Confidence is 1.0 for an exact preset match, 0.7 for a keyword match,
@@ -259,7 +251,7 @@ class StackRecommender:
             return RULE_BASED_STACK[product_lower].copy(), 1.0
 
         # Walk keyword map — take highest-weight match
-        matched_preset: Optional[str] = None
+        matched_preset: str | None = None
         for keyword, preset_key in _KEYWORD_MAP.items():
             if keyword in signals:
                 matched_preset = preset_key
@@ -284,9 +276,7 @@ class StackRecommender:
     # Scale adjustment
     # ------------------------------------------------------------------
 
-    def _adjust_for_scale(
-        self, stack: Dict[str, str], intent: ProjectIntent
-    ) -> Dict[str, str]:
+    def _adjust_for_scale(self, stack: dict[str, str], intent: ProjectIntent) -> dict[str, str]:
         """Upgrade the stack when high-scale indicators are detected."""
         scale_text = (intent.scale_requirements or "").lower()
         is_high_scale = any(ind in scale_text for ind in _HIGH_SCALE_INDICATORS)
@@ -321,8 +311,8 @@ class StackRecommender:
         self,
         intent: ProjectIntent,
         spec: ProjectSpec,
-        initial_stack: Dict[str, str],
-    ) -> Dict[str, str]:
+        initial_stack: dict[str, str],
+    ) -> dict[str, str]:
         """Use the LLM to refine or override the initial stack.
 
         Only called when rule-based matching has low confidence.

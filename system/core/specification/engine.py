@@ -7,9 +7,9 @@ ProjectSpec, which is persisted to PostgreSQL and returned to callers.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from typing import Any, Optional
+import json
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,19 +21,16 @@ from system.core.specification.dependency_analyzer import DependencyAnalyzer
 from system.core.specification.prd_generator import PRDGenerator
 from system.core.specification.schema_generator import SchemaGenerator
 from system.core.specification.schemas import (
-    APIContract,
     DBSchema,
     PermissionMatrix,
     ProjectSpec,
     ServiceTopology,
-    UIStructure,
 )
 from system.core.specification.ui_mapper import UIMapper
 from system.observability.logging.logger import get_logger
-from system.shared.database import Base, get_db
+from system.shared.database import Base
 from system.shared.exceptions import SpecificationError
-from system.shared.llm_client import LLMMessage, get_llm_client
-from system.shared.constants import DEFAULT_LLM_MODEL
+from system.shared.llm_client import get_llm_client
 
 logger = get_logger(__name__)
 
@@ -54,9 +51,7 @@ class ProjectSpecDB(Base):
     prd_text: Mapped[str] = mapped_column(nullable=False)
     version: Mapped[int] = mapped_column(default=1, nullable=False)
     estimated_complexity: Mapped[str] = mapped_column(nullable=False, default="medium")
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
@@ -79,59 +74,69 @@ def _derive_service_topology(intent: ProjectIntent, db_schema: DBSchema) -> Serv
     communication: list[dict[str, str]] = []
 
     # Always: API backend
-    services.append({
-        "name": "api",
-        "type": "api",
-        "description": "Main FastAPI backend — REST endpoints + business logic",
-        "port": 8000,
-        "technology": "FastAPI / Python 3.12",
-        "dependencies": ["database", "redis"],
-        "replicas": 2,
-        "resource_requirements": {"cpu": "500m", "memory": "512Mi"},
-    })
+    services.append(
+        {
+            "name": "api",
+            "type": "api",
+            "description": "Main FastAPI backend — REST endpoints + business logic",
+            "port": 8000,
+            "technology": "FastAPI / Python 3.12",
+            "dependencies": ["database", "redis"],
+            "replicas": 2,
+            "resource_requirements": {"cpu": "500m", "memory": "512Mi"},
+        }
+    )
 
     # Always: PostgreSQL
-    services.append({
-        "name": "database",
-        "type": "database",
-        "description": "Primary PostgreSQL database",
-        "port": 5432,
-        "technology": "PostgreSQL 16",
-        "dependencies": [],
-        "replicas": 1,
-        "resource_requirements": {"cpu": "1000m", "memory": "2Gi"},
-    })
+    services.append(
+        {
+            "name": "database",
+            "type": "database",
+            "description": "Primary PostgreSQL database",
+            "port": 5432,
+            "technology": "PostgreSQL 16",
+            "dependencies": [],
+            "replicas": 1,
+            "resource_requirements": {"cpu": "1000m", "memory": "2Gi"},
+        }
+    )
 
     # Always: Redis
-    services.append({
-        "name": "redis",
-        "type": "cache",
-        "description": "In-memory cache and pub/sub broker",
-        "port": 6379,
-        "technology": "Redis 7",
-        "dependencies": [],
-        "replicas": 1,
-        "resource_requirements": {"cpu": "250m", "memory": "512Mi"},
-    })
+    services.append(
+        {
+            "name": "redis",
+            "type": "cache",
+            "description": "In-memory cache and pub/sub broker",
+            "port": 6379,
+            "technology": "Redis 7",
+            "dependencies": [],
+            "replicas": 1,
+            "resource_requirements": {"cpu": "250m", "memory": "512Mi"},
+        }
+    )
 
     # Frontend (for non-API projects)
     if intent.platform != Platform.API:
-        services.append({
-            "name": "frontend",
-            "type": "frontend",
-            "description": "Next.js web application",
-            "port": 3000,
-            "technology": "Next.js 14 / TypeScript",
-            "dependencies": ["api"],
-            "replicas": 2,
-            "resource_requirements": {"cpu": "250m", "memory": "512Mi"},
-        })
-        communication.append({
-            "from": "frontend",
-            "to": "api",
-            "protocol": "HTTP",
-            "description": "REST API calls via HTTPS",
-        })
+        services.append(
+            {
+                "name": "frontend",
+                "type": "frontend",
+                "description": "Next.js web application",
+                "port": 3000,
+                "technology": "Next.js 14 / TypeScript",
+                "dependencies": ["api"],
+                "replicas": 2,
+                "resource_requirements": {"cpu": "250m", "memory": "512Mi"},
+            }
+        )
+        communication.append(
+            {
+                "from": "frontend",
+                "to": "api",
+                "protocol": "HTTP",
+                "description": "REST API calls via HTTPS",
+            }
+        )
 
     # Worker service if there are background-friendly features
     needs_worker = any(
@@ -139,22 +144,26 @@ def _derive_service_topology(intent: ProjectIntent, db_schema: DBSchema) -> Serv
         for kw in ("email", "notification", "report", "export", "schedule", "batch", "process")
     )
     if needs_worker or intent.integrations:
-        services.append({
-            "name": "worker",
-            "type": "worker",
-            "description": "Celery background task worker",
-            "port": None,
-            "technology": "Celery / Python",
-            "dependencies": ["redis", "database"],
-            "replicas": 2,
-            "resource_requirements": {"cpu": "500m", "memory": "512Mi"},
-        })
-        communication.append({
-            "from": "api",
-            "to": "worker",
-            "protocol": "queue",
-            "description": "Task dispatch via Redis queue",
-        })
+        services.append(
+            {
+                "name": "worker",
+                "type": "worker",
+                "description": "Celery background task worker",
+                "port": None,
+                "technology": "Celery / Python",
+                "dependencies": ["redis", "database"],
+                "replicas": 2,
+                "resource_requirements": {"cpu": "500m", "memory": "512Mi"},
+            }
+        )
+        communication.append(
+            {
+                "from": "api",
+                "to": "worker",
+                "protocol": "queue",
+                "description": "Task dispatch via Redis queue",
+            }
+        )
 
     # ML service
     if intent.platform and hasattr(intent, "tech_preferences"):
@@ -162,35 +171,43 @@ def _derive_service_topology(intent: ProjectIntent, db_schema: DBSchema) -> Serv
             kw in " ".join(intent.core_features).lower()
             for kw in ("ml", "ai", "model", "prediction", "recommendation", "classification")
         ):
-            services.append({
-                "name": "ml-service",
-                "type": "ml",
-                "description": "Python ML inference service",
-                "port": 8001,
-                "technology": "FastAPI / PyTorch",
-                "dependencies": ["api"],
-                "replicas": 1,
-                "resource_requirements": {"cpu": "2000m", "memory": "4Gi"},
-            })
-            communication.append({
-                "from": "api",
-                "to": "ml-service",
-                "protocol": "HTTP",
-                "description": "Internal gRPC/HTTP for ML inference",
-            })
+            services.append(
+                {
+                    "name": "ml-service",
+                    "type": "ml",
+                    "description": "Python ML inference service",
+                    "port": 8001,
+                    "technology": "FastAPI / PyTorch",
+                    "dependencies": ["api"],
+                    "replicas": 1,
+                    "resource_requirements": {"cpu": "2000m", "memory": "4Gi"},
+                }
+            )
+            communication.append(
+                {
+                    "from": "api",
+                    "to": "ml-service",
+                    "protocol": "HTTP",
+                    "description": "Internal gRPC/HTTP for ML inference",
+                }
+            )
 
-    communication.append({
-        "from": "api",
-        "to": "database",
-        "protocol": "TCP",
-        "description": "SQLAlchemy async connection pool",
-    })
-    communication.append({
-        "from": "api",
-        "to": "redis",
-        "protocol": "TCP",
-        "description": "Cache reads/writes and pub/sub",
-    })
+    communication.append(
+        {
+            "from": "api",
+            "to": "database",
+            "protocol": "TCP",
+            "description": "SQLAlchemy async connection pool",
+        }
+    )
+    communication.append(
+        {
+            "from": "api",
+            "to": "redis",
+            "protocol": "TCP",
+            "description": "Cache reads/writes and pub/sub",
+        }
+    )
 
     return ServiceTopology(services=services, communication_patterns=communication)
 
@@ -217,18 +234,22 @@ def _derive_permissions_matrix(intent: ProjectIntent) -> PermissionMatrix:
     # Add feature-specific permissions
     for feature in intent.core_features:
         slug = feature.lower().replace(" ", "_")
-        user_permissions.extend([
-            f"{slug}:read",
-            f"{slug}:create",
-            f"{slug}:update",
-        ])
-        admin_permissions.extend([
-            f"{slug}:read",
-            f"{slug}:create",
-            f"{slug}:update",
-            f"{slug}:delete",
-            f"{slug}:manage",
-        ])
+        user_permissions.extend(
+            [
+                f"{slug}:read",
+                f"{slug}:create",
+                f"{slug}:update",
+            ]
+        )
+        admin_permissions.extend(
+            [
+                f"{slug}:read",
+                f"{slug}:create",
+                f"{slug}:update",
+                f"{slug}:delete",
+                f"{slug}:manage",
+            ]
+        )
 
     permissions: dict[str, list[str]] = {
         "admin": admin_permissions,
@@ -237,8 +258,7 @@ def _derive_permissions_matrix(intent: ProjectIntent) -> PermissionMatrix:
 
     if "manager" in roles:
         manager_permissions = [
-            p for p in admin_permissions
-            if not p.endswith(":delete") and p != "*"
+            p for p in admin_permissions if not p.endswith(":delete") and p != "*"
         ]
         manager_permissions.extend(["reports:read", "reports:export"])
         permissions["manager"] = list(dict.fromkeys(manager_permissions))
@@ -470,7 +490,7 @@ class SpecificationEngine:
         self,
         project_id: str,
         db: AsyncSession | None = None,
-    ) -> Optional[ProjectSpec]:
+    ) -> ProjectSpec | None:
         """Retrieve a persisted ProjectSpec by project ID.
 
         Args:
@@ -567,9 +587,7 @@ class SpecificationEngine:
         """Insert or replace a ProjectSpecDB row."""
         # Check for existing row
         result = await session.execute(
-            select(ProjectSpecDB).where(
-                ProjectSpecDB.project_id == spec.project_id
-            )
+            select(ProjectSpecDB).where(ProjectSpecDB.project_id == spec.project_id)
         )
         existing_row = result.scalar_one_or_none()
 

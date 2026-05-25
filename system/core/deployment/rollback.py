@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 import uuid
-from typing import Any, Dict, List, Optional
 
-from system.core.deployment.schemas import DeploymentConfig, DeploymentRecord
+from system.core.deployment.schemas import DeploymentRecord
 from system.observability.logging.logger import get_logger
 from system.shared.exceptions import DeploymentError
 
@@ -30,16 +30,16 @@ class RollbackManager:
     def __init__(
         self,
         provisioner: Any,
-        docker_manager: Optional[Any] = None,
-        k8s_manager: Optional[Any] = None,
-        db: Optional[Any] = None,
+        docker_manager: Any | None = None,
+        k8s_manager: Any | None = None,
+        db: Any | None = None,
     ) -> None:
         self.provisioner = provisioner
         self.docker = docker_manager
         self.k8s = k8s_manager
         self.db = db
         # In-memory registry used when no DB is provided.
-        self._records: Dict[str, DeploymentRecord] = {}
+        self._records: dict[str, DeploymentRecord] = {}
 
     # ------------------------------------------------------------------
     # Record management
@@ -147,7 +147,7 @@ class RollbackManager:
             and record.previous_deployment_id in self._records
         )
 
-    async def get_rollback_target(self, deployment_id: str) -> Optional[DeploymentRecord]:
+    async def get_rollback_target(self, deployment_id: str) -> DeploymentRecord | None:
         """Return the :class:`DeploymentRecord` that would be restored by a rollback."""
         try:
             record = self._get_record(deployment_id)
@@ -157,7 +157,7 @@ class RollbackManager:
             return self._records.get(record.previous_deployment_id)
         return None
 
-    async def get_rollback_history(self, project_id: str) -> List[DeploymentRecord]:
+    async def get_rollback_history(self, project_id: str) -> list[DeploymentRecord]:
         """Return all recorded deployments for *project_id*, newest first."""
         records = [r for r in self._records.values() if r.project_id == project_id]
         return sorted(records, key=lambda r: r.created_at, reverse=True)
@@ -169,4 +169,6 @@ class RollbackManager:
             record.rollback_available = False
             logger.info("Rollback disabled", deployment_id=deployment_id)
         except DeploymentError:
-            logger.warning("Cannot disable rollback — deployment not found", deployment_id=deployment_id)
+            logger.warning(
+                "Cannot disable rollback — deployment not found", deployment_id=deployment_id
+            )

@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.observability.logging.logger import get_logger
-from system.shared.constants import DEFAULT_LLM_MODEL, DEFAULT_LLM_TEMPERATURE
+from system.shared.constants import DEFAULT_LLM_MODEL
 from system.shared.exceptions import IntentError
-from system.shared.llm_client import LLMMessage, LLMResponse, get_llm_client
+from system.shared.llm_client import LLMMessage, LLMResponse
 
-from .schemas import ClarificationQuestion, IntentStatus, ProjectIntent
+from .schemas import ClarificationQuestion, ProjectIntent
 
 logger = get_logger(__name__)
 
@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 # Human-readable field labels and priority ordering.
 # =========================================================================== #
 
-CLARIFICATION_FIELD_MAP: Dict[str, str] = {
+CLARIFICATION_FIELD_MAP: dict[str, str] = {
     "industry": "What industry or business domain does this product serve?",
     "product_type": "What type of software product is this (e.g. CRM, SaaS platform, mobile app)?",
     "core_features": "What are the 3–5 most important features this product must have?",
@@ -46,7 +46,7 @@ CLARIFICATION_FIELD_MAP: Dict[str, str] = {
 }
 
 # Priority ordering — fields asked first when multiple are missing.
-_PRIORITY_ORDER: List[str] = [
+_PRIORITY_ORDER: list[str] = [
     "industry",
     "product_type",
     "core_features",
@@ -63,9 +63,22 @@ _PRIORITY_ORDER: List[str] = [
 ]
 
 # Suggested multiple-choice options for fields where they make sense.
-_FIELD_OPTIONS: Dict[str, List[str]] = {
-    "platform": ["Web (browser-based)", "Mobile (iOS/Android)", "Desktop (Electron/native)", "CLI (command-line)", "API-only (headless service)"],
-    "deployment_target": ["Docker / self-hosted", "Kubernetes (k8s)", "Vercel (serverless)", "Railway", "AWS", "GCP"],
+_FIELD_OPTIONS: dict[str, list[str]] = {
+    "platform": [
+        "Web (browser-based)",
+        "Mobile (iOS/Android)",
+        "Desktop (Electron/native)",
+        "CLI (command-line)",
+        "API-only (headless service)",
+    ],
+    "deployment_target": [
+        "Docker / self-hosted",
+        "Kubernetes (k8s)",
+        "Vercel (serverless)",
+        "Railway",
+        "AWS",
+        "GCP",
+    ],
     "tech_preferences": [],  # too open-ended for canned options
 }
 
@@ -94,7 +107,7 @@ class ClarificationEngine:
         self,
         intent: ProjectIntent,
         round_num: int,
-    ) -> List[ClarificationQuestion]:
+    ) -> list[ClarificationQuestion]:
         """Generate up to 3 clarifying questions for the highest-priority gaps.
 
         First attempts LLM-driven question generation for richer, context-aware
@@ -141,7 +154,7 @@ class ClarificationEngine:
     async def apply_answers(
         self,
         intent: ProjectIntent,
-        answers: Dict[str, str],
+        answers: dict[str, str],
     ) -> ProjectIntent:
         """Merge user answers into the intent and recompute confidence.
 
@@ -170,7 +183,7 @@ class ClarificationEngine:
             field_type = self._resolve_field_type(field)
 
             if field_type == "list":
-                existing: List[str] = updated_data.get(field, []) or []
+                existing: list[str] = updated_data.get(field, []) or []
                 new_items = self._split_list_answer(answer)
                 # Merge without duplicates, preserving order
                 merged = list(existing)
@@ -180,7 +193,7 @@ class ClarificationEngine:
                 updated_data[field] = merged
 
             elif field_type == "dict":
-                existing_dict: Dict[str, str] = updated_data.get(field, {}) or {}
+                existing_dict: dict[str, str] = updated_data.get(field, {}) or {}
                 parsed = self._parse_tech_preferences(answer)
                 existing_dict.update(parsed)
                 updated_data[field] = existing_dict
@@ -212,12 +225,12 @@ class ClarificationEngine:
     async def _llm_generate(
         self,
         intent: ProjectIntent,
-        fields_to_ask: List[str],
+        fields_to_ask: list[str],
         round_num: int,
-    ) -> List[ClarificationQuestion]:
+    ) -> list[ClarificationQuestion]:
         """Call the LLM to produce contextually-aware clarification questions."""
         system_prompt = self._build_clarification_prompt(intent, fields_to_ask, round_num)
-        messages: List[LLMMessage] = [
+        messages: list[LLMMessage] = [
             LLMMessage(
                 role="user",
                 content=(
@@ -239,11 +252,11 @@ class ClarificationEngine:
     def _build_clarification_prompt(
         self,
         intent: ProjectIntent,
-        missing: List[str],
+        missing: list[str],
         round_num: int,
     ) -> str:
         """Construct the system prompt for LLM-driven question generation."""
-        context_parts: List[str] = []
+        context_parts: list[str] = []
         if intent.industry:
             context_parts.append(f"Industry: {intent.industry}")
         if intent.product_type:
@@ -253,20 +266,19 @@ class ClarificationEngine:
         if intent.target_users:
             context_parts.append(f"Target users: {intent.target_users}")
 
-        context_summary = "\n".join(context_parts) if context_parts else "Minimal context available."
-
-        field_descriptions = "\n".join(
-            f"- {field}: {CLARIFICATION_FIELD_MAP.get(field, field)}"
-            for field in missing
+        context_summary = (
+            "\n".join(context_parts) if context_parts else "Minimal context available."
         )
 
-        options_hints: List[str] = []
+        field_descriptions = "\n".join(
+            f"- {field}: {CLARIFICATION_FIELD_MAP.get(field, field)}" for field in missing
+        )
+
+        options_hints: list[str] = []
         for field in missing:
             opts = _FIELD_OPTIONS.get(field, [])
             if opts:
-                options_hints.append(
-                    f"For '{field}', suggest these options: {', '.join(opts)}"
-                )
+                options_hints.append(f"For '{field}', suggest these options: {', '.join(opts)}")
         options_text = "\n".join(options_hints) if options_hints else ""
 
         return f"""You are an expert requirements analyst for FORGE, an autonomous software production system.
@@ -308,8 +320,8 @@ Rules:
     def _parse_questions_response(
         self,
         raw: str,
-        expected_fields: List[str],
-    ) -> List[ClarificationQuestion]:
+        expected_fields: list[str],
+    ) -> list[ClarificationQuestion]:
         """Parse the LLM JSON array into ClarificationQuestion objects."""
         # Strip code fences if present
         cleaned = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
@@ -320,12 +332,12 @@ Rules:
             return self._rule_based_questions(None, expected_fields)
 
         try:
-            items: List[Dict[str, Any]] = json.loads(arr_match.group(0))
+            items: list[dict[str, Any]] = json.loads(arr_match.group(0))
         except json.JSONDecodeError:
             self._log.warning("question_parse_json_error", raw=raw[:200])
             return self._rule_based_questions(None, expected_fields)
 
-        questions: List[ClarificationQuestion] = []
+        questions: list[ClarificationQuestion] = []
         seen_fields: set[str] = set()
 
         for item in items:
@@ -363,11 +375,11 @@ Rules:
 
     def _rule_based_questions(
         self,
-        intent: Optional[ProjectIntent],
-        fields: List[str],
-    ) -> List[ClarificationQuestion]:
+        intent: ProjectIntent | None,
+        fields: list[str],
+    ) -> list[ClarificationQuestion]:
         """Build deterministic questions from CLARIFICATION_FIELD_MAP."""
-        questions: List[ClarificationQuestion] = []
+        questions: list[ClarificationQuestion] = []
         for field in fields[:3]:
             question_text = CLARIFICATION_FIELD_MAP.get(
                 field, f"Please provide more detail about: {field}"
@@ -387,7 +399,7 @@ Rules:
     # Helpers
     # ---------------------------------------------------------------------- #
 
-    def _prioritise(self, missing: List[str]) -> List[str]:
+    def _prioritise(self, missing: list[str]) -> list[str]:
         """Sort missing fields by priority order."""
         priority_index = {f: i for i, f in enumerate(_PRIORITY_ORDER)}
         return sorted(
@@ -398,7 +410,11 @@ Rules:
     def _resolve_field_type(self, field: str) -> str:
         """Return 'list', 'dict', or 'str' for a given field name."""
         list_fields = {
-            "core_features", "constraints", "integrations", "security_requirements", "missing_fields"
+            "core_features",
+            "constraints",
+            "integrations",
+            "security_requirements",
+            "missing_fields",
         }
         dict_fields = {"tech_preferences"}
         if field in list_fields:
@@ -407,7 +423,7 @@ Rules:
             return "dict"
         return "str"
 
-    def _split_list_answer(self, answer: str) -> List[str]:
+    def _split_list_answer(self, answer: str) -> list[str]:
         """Convert a free-text answer into a list of items."""
         # Try JSON first
         try:
@@ -425,7 +441,7 @@ Rules:
         # Single item
         return [answer.strip()] if answer.strip() else []
 
-    def _parse_tech_preferences(self, answer: str) -> Dict[str, str]:
+    def _parse_tech_preferences(self, answer: str) -> dict[str, str]:
         """Parse a tech preferences answer into {role: technology} dict."""
         # Try JSON object
         try:
@@ -436,7 +452,7 @@ Rules:
             pass
 
         # Heuristic: "FastAPI for backend, React for frontend, PostgreSQL for database"
-        prefs: Dict[str, str] = {}
+        prefs: dict[str, str] = {}
         pattern = re.compile(
             r"(\w[\w\s\.\-]+?)\s+(?:for|as|:)\s+(backend|frontend|database|cache|queue|mobile)",
             re.IGNORECASE,

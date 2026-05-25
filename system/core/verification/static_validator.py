@@ -6,16 +6,14 @@ and py_compile syntax checks against a project directory.
 
 from __future__ import annotations
 
-import asyncio
 import json
+from pathlib import Path
 import py_compile
 import time
+from typing import Any
 import uuid
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 
 from system.observability.logging.logger import get_logger
-from system.shared.exceptions import VerificationError
 from system.shared.models import ValidationStatus
 
 from .schemas import ValidationCheck, VerificationReport
@@ -49,13 +47,13 @@ class StaticValidator:
         self,
         project_path: str,
         project_id: str,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> VerificationReport:
         """Run all static checks and return a consolidated VerificationReport."""
         t_start = time.monotonic()
         logger.info("Starting static validation for project %s at %s", project_id, project_path)
 
-        all_checks: List[ValidationCheck] = []
+        all_checks: list[ValidationCheck] = []
 
         try:
             ruff_checks = await self._ruff_check(project_path)
@@ -116,7 +114,7 @@ class StaticValidator:
     # Individual checks
     # ---------------------------------------------------------------------- #
 
-    async def _ruff_check(self, project_path: str) -> List[ValidationCheck]:
+    async def _ruff_check(self, project_path: str) -> list[ValidationCheck]:
         """Run ruff lint and return per-finding ValidationChecks."""
         t0 = time.monotonic()
         stdout, stderr, rc = await self._exec.run(
@@ -141,18 +139,22 @@ class StaticValidator:
         checks = self._parse_ruff_output(stdout)
         for c in checks:
             c.duration_ms = elapsed
-        return checks if checks else [
-            ValidationCheck(
-                check_id=str(uuid.uuid4()),
-                check_type="lint",
-                name="ruff lint",
-                status=ValidationStatus.PASSED,
-                message="No lint issues found.",
-                duration_ms=elapsed,
-            )
-        ]
+        return (
+            checks
+            if checks
+            else [
+                ValidationCheck(
+                    check_id=str(uuid.uuid4()),
+                    check_type="lint",
+                    name="ruff lint",
+                    status=ValidationStatus.PASSED,
+                    message="No lint issues found.",
+                    duration_ms=elapsed,
+                )
+            ]
+        )
 
-    async def _mypy_check(self, project_path: str) -> List[ValidationCheck]:
+    async def _mypy_check(self, project_path: str) -> list[ValidationCheck]:
         """Run mypy type-checking and return per-finding ValidationChecks."""
         t0 = time.monotonic()
         stdout, stderr, rc = await self._exec.run(
@@ -184,7 +186,7 @@ class StaticValidator:
             ]
         return checks
 
-    async def _format_check(self, project_path: str) -> List[ValidationCheck]:
+    async def _format_check(self, project_path: str) -> list[ValidationCheck]:
         """Run ruff format --check to verify code formatting."""
         t0 = time.monotonic()
         stdout, stderr, rc = await self._exec.run(
@@ -206,7 +208,7 @@ class StaticValidator:
             ]
 
         # Parse files mentioned in stderr output
-        unformatted: List[str] = []
+        unformatted: list[str] = []
         combined = (stdout + stderr).strip()
         for line in combined.splitlines():
             line = line.strip()
@@ -215,7 +217,7 @@ class StaticValidator:
                 if len(parts) >= 3:
                     unformatted.append(parts[2])
 
-        checks: List[ValidationCheck] = []
+        checks: list[ValidationCheck] = []
         if unformatted:
             for fp in unformatted:
                 checks.append(
@@ -242,14 +244,14 @@ class StaticValidator:
             )
         return checks
 
-    async def _import_check(self, project_path: str) -> List[ValidationCheck]:
+    async def _import_check(self, project_path: str) -> list[ValidationCheck]:
         """Detect circular imports by scanning .py files for import relationships."""
         t0 = time.monotonic()
         path_obj = Path(project_path)
         py_files = list(path_obj.rglob("*.py"))
 
         # Build adjacency map: module → set of imported modules
-        imports_map: Dict[str, set] = {}
+        imports_map: dict[str, set] = {}
         for py_file in py_files:
             rel = py_file.relative_to(path_obj)
             module_name = str(rel).replace("/", ".").replace("\\", ".").removesuffix(".py")
@@ -295,13 +297,13 @@ class StaticValidator:
             for cycle in cycles
         ]
 
-    async def _syntax_check(self, project_path: str) -> List[ValidationCheck]:
+    async def _syntax_check(self, project_path: str) -> list[ValidationCheck]:
         """Run py_compile on every .py file to catch syntax errors."""
         t0 = time.monotonic()
         path_obj = Path(project_path)
         py_files = list(path_obj.rglob("*.py"))
 
-        syntax_errors: List[ValidationCheck] = []
+        syntax_errors: list[ValidationCheck] = []
         for py_file in py_files:
             try:
                 py_compile.compile(str(py_file), doraise=True)
@@ -350,9 +352,9 @@ class StaticValidator:
     # Parsers
     # ---------------------------------------------------------------------- #
 
-    def _parse_ruff_output(self, output: str) -> List[ValidationCheck]:
+    def _parse_ruff_output(self, output: str) -> list[ValidationCheck]:
         """Parse ruff JSON output into ValidationCheck list."""
-        checks: List[ValidationCheck] = []
+        checks: list[ValidationCheck] = []
         try:
             findings = json.loads(output)
         except json.JSONDecodeError:
@@ -402,9 +404,9 @@ class StaticValidator:
             )
         return checks
 
-    def _parse_mypy_output(self, output: str) -> List[ValidationCheck]:
+    def _parse_mypy_output(self, output: str) -> list[ValidationCheck]:
         """Parse mypy output (line-by-line text or JSON) into ValidationChecks."""
-        checks: List[ValidationCheck] = []
+        checks: list[ValidationCheck] = []
         for line in output.splitlines():
             line = line.strip()
             if not line:
@@ -415,9 +417,7 @@ class StaticValidator:
                     obj = json.loads(line)
                     severity = obj.get("severity", "error")
                     status = (
-                        ValidationStatus.FAILED
-                        if severity == "error"
-                        else ValidationStatus.WARNING
+                        ValidationStatus.FAILED if severity == "error" else ValidationStatus.WARNING
                     )
                     checks.append(
                         ValidationCheck(
@@ -461,10 +461,10 @@ class StaticValidator:
     # ---------------------------------------------------------------------- #
 
     @staticmethod
-    def _parse_mypy_line(line: str) -> Dict[str, Any]:
+    def _parse_mypy_line(line: str) -> dict[str, Any]:
         """Extract file/line/col from a mypy text output line."""
         parts = line.split(":")
-        result: Dict[str, Any] = {"raw": line}
+        result: dict[str, Any] = {"raw": line}
         try:
             result["file"] = parts[0].strip()
             result["line"] = int(parts[1].strip()) if len(parts) > 1 else 0
@@ -474,13 +474,13 @@ class StaticValidator:
         return result
 
     @staticmethod
-    def _detect_cycles(graph: Dict[str, set]) -> List[List[str]]:
+    def _detect_cycles(graph: dict[str, set]) -> list[list[str]]:
         """Detect cycles in an import adjacency map using DFS."""
         visited: set = set()
         rec_stack: set = set()
-        cycles: List[List[str]] = []
+        cycles: list[list[str]] = []
 
-        def dfs(node: str, path: List[str]) -> None:
+        def dfs(node: str, path: list[str]) -> None:
             visited.add(node)
             rec_stack.add(node)
             path.append(node)
@@ -503,9 +503,9 @@ class StaticValidator:
 
         return cycles[:10]  # Cap at 10 cycles for readability
 
-    def _generate_fix_suggestions(self, checks: List[ValidationCheck]) -> List[str]:
+    def _generate_fix_suggestions(self, checks: list[ValidationCheck]) -> list[str]:
         """Generate actionable fix suggestions for failed/warning checks."""
-        suggestions: List[str] = []
+        suggestions: list[str] = []
         seen_rules: set = set()
 
         for check in checks:
@@ -523,7 +523,9 @@ class StaticValidator:
             if "ruff:f401" in name_lower or rule == "F401":
                 suggestions.append("Remove unused imports or add `# noqa: F401` if intentional.")
             elif "ruff:e501" in name_lower or rule == "E501":
-                suggestions.append("Wrap long lines to <= 88 characters (use `ruff format .` to auto-fix).")
+                suggestions.append(
+                    "Wrap long lines to <= 88 characters (use `ruff format .` to auto-fix)."
+                )
             elif "ruff" in name_lower and check.details.get("fixable"):
                 suggestions.append(f"Run `ruff check --fix .` to auto-fix {rule} violations.")
             elif "mypy" in name_lower or check.check_type == "type_check":

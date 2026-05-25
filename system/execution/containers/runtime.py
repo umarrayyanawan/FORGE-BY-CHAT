@@ -1,9 +1,9 @@
 """Container runtime — manages Docker containers for isolated agent execution."""
+
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
 
 from system.observability.logging.logger import get_logger
 
@@ -15,8 +15,8 @@ class ContainerSpec:
     image: str
     name: str
     command: str = ""
-    environment: Dict[str, str] = field(default_factory=dict)
-    volumes: Dict[str, str] = field(default_factory=dict)
+    environment: dict[str, str] = field(default_factory=dict)
+    volumes: dict[str, str] = field(default_factory=dict)
     memory_limit: str = "512m"
     cpu_limit: str = "0.5"
     network: str = "bridge"
@@ -49,7 +49,7 @@ class ContainerRuntime:
         )
         try:
             stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return ContainerResult(

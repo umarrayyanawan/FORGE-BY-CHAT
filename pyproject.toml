@@ -115,6 +115,7 @@ force-sort-within-sections = true
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["N802", "N803"]
 "alembic/**/*.py" = ["F401"]
+"system/repo_intelligence/ast/parser.py" = ["N806"]
 
 [tool.ruff.format]
 quote-style = "double"

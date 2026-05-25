@@ -9,20 +9,25 @@ payloads with full audit trails.
 from __future__ import annotations
 
 import time
+from typing import Any
 import uuid
-from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from system.observability.logging.logger import get_logger
 from system.shared.exceptions import ToolError
-from system.tools.github.client import GitHubClient
-from system.tools.terminal.executor import TerminalExecutor
+from system.tools.deployment.deployer import (
+    DeploymentTool,
+    DockerDeployConfig,
+    RailwayDeployConfig,
+    VercelDeployConfig,
+)
 from system.tools.docker.manager import DockerManager
-from system.tools.deployment.deployer import DeploymentTool, DockerDeployConfig, VercelDeployConfig, RailwayDeployConfig
+from system.tools.github.client import GitHubClient
 from system.tools.schemas import ToolExecutionResult
+from system.tools.terminal.executor import TerminalExecutor
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
@@ -31,6 +36,7 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 # --------------------------------------------------------------------------- #
 # Shared dependency factories
 # --------------------------------------------------------------------------- #
+
 
 def get_github_client() -> GitHubClient:
     return GitHubClient()
@@ -52,12 +58,15 @@ def get_deployment_tool() -> DeploymentTool:
 # Request models
 # --------------------------------------------------------------------------- #
 
+
 class CreateRepoRequest(BaseModel):
     name: str = Field(..., description="Repository name.")
     description: str = Field(default="", description="Repository description.")
     private: bool = Field(default=True, description="Create as private repository.")
-    org: Optional[str] = Field(default=None, description="Organisation name (uses authenticated user if omitted).")
-    topics: Optional[List[str]] = Field(default=None, description="Repository topic tags.")
+    org: str | None = Field(
+        default=None, description="Organisation name (uses authenticated user if omitted)."
+    )
+    topics: list[str] | None = Field(default=None, description="Repository topic tags.")
 
 
 class CreateBranchRequest(BaseModel):
@@ -69,7 +78,7 @@ class CreateBranchRequest(BaseModel):
 class CommitFilesRequest(BaseModel):
     repo: str = Field(..., description="Full repo slug: 'owner/repo'.")
     branch: str = Field(..., description="Target branch name.")
-    files: Dict[str, str] = Field(..., description="Mapping of {file_path: content} to commit.")
+    files: dict[str, str] = Field(..., description="Mapping of {file_path: content} to commit.")
     message: str = Field(..., description="Commit message.")
     author_name: str = Field(default="FORGE Bot", description="Git author name.")
     author_email: str = Field(default="forge-bot@forge.ai", description="Git author email.")
@@ -87,15 +96,19 @@ class CreatePRRequest(BaseModel):
 class MergePRRequest(BaseModel):
     repo: str = Field(..., description="Full repo slug: 'owner/repo'.")
     pr_number: int = Field(..., description="Pull request number.")
-    merge_method: str = Field(default="squash", description="Merge method: 'merge' | 'squash' | 'rebase'.")
-    commit_title: Optional[str] = Field(default=None, description="Optional merge commit title.")
+    merge_method: str = Field(
+        default="squash", description="Merge method: 'merge' | 'squash' | 'rebase'."
+    )
+    commit_title: str | None = Field(default=None, description="Optional merge commit title.")
 
 
 class RunCommandRequest(BaseModel):
     command: str = Field(..., description="Shell command to execute.")
     cwd: str = Field(default=".", description="Working directory.")
     timeout: int = Field(default=300, ge=1, le=3600, description="Execution timeout in seconds.")
-    env: Optional[Dict[str, str]] = Field(default=None, description="Additional environment variables.")
+    env: dict[str, str] | None = Field(
+        default=None, description="Additional environment variables."
+    )
     sandboxed: bool = Field(default=True, description="Enforce command sandbox allow-list.")
 
 
@@ -112,8 +125,12 @@ class RunLintRequest(BaseModel):
 
 
 class DockerDeployRequest(BaseModel):
-    compose_file: str = Field(default="docker-compose.yml", description="Path to docker-compose file.")
-    services: List[str] = Field(default_factory=list, description="Services to start (all if empty).")
+    compose_file: str = Field(
+        default="docker-compose.yml", description="Path to docker-compose file."
+    )
+    services: list[str] = Field(
+        default_factory=list, description="Services to start (all if empty)."
+    )
     env_file: str = Field(default=".env", description="Path to .env file.")
     project_dir: str = Field(default=".", description="Project directory.")
     build: bool = Field(default=False, description="Build images before starting.")
@@ -138,15 +155,16 @@ class RailwayDeployRequest(BaseModel):
 # Internal helpers
 # --------------------------------------------------------------------------- #
 
+
 def _build_result(
     tool_name: str,
     action: str,
     success: bool,
     output: Any,
-    error: Optional[str],
+    error: str | None,
     duration_ms: int,
     project_id: str = "unknown",
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
 ) -> ToolExecutionResult:
     """Assemble a :class:`ToolExecutionResult` with full audit trail."""
     return ToolExecutionResult(
@@ -184,6 +202,7 @@ def _handle_tool_error(exc: ToolError, tool_name: str, action: str) -> JSONRespo
 # GitHub endpoints
 # --------------------------------------------------------------------------- #
 
+
 @router.post(
     "/github/repo",
     summary="Create a GitHub repository",
@@ -192,7 +211,7 @@ def _handle_tool_error(exc: ToolError, tool_name: str, action: str) -> JSONRespo
 async def create_github_repo(
     request: CreateRepoRequest,
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new repository on GitHub and return the full API response."""
     start = time.monotonic()
     try:
@@ -230,7 +249,7 @@ async def create_github_repo(
 async def create_branch(
     request: CreateBranchRequest,
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new branch and return the git ref object."""
     start = time.monotonic()
     try:
@@ -262,7 +281,7 @@ async def create_branch(
 async def commit_files(
     request: CommitFilesRequest,
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Commit files and return the new commit object."""
     start = time.monotonic()
     try:
@@ -300,7 +319,7 @@ async def commit_files(
 async def create_pr(
     request: CreatePRRequest,
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a pull request and return the PR metadata."""
     start = time.monotonic()
     try:
@@ -340,7 +359,7 @@ async def create_pr(
 async def merge_pr(
     request: MergePRRequest,
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Merge a pull request."""
     start = time.monotonic()
     try:
@@ -371,13 +390,19 @@ async def merge_pr(
 async def list_branches(
     repo: str = Query(..., description="Full repo slug: 'owner/repo'."),
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List all branches in a repository."""
     start = time.monotonic()
     try:
         branches = await client.list_branches(repo=repo)
         duration_ms = int((time.monotonic() - start) * 1000)
-        return {"success": True, "repo": repo, "branches": branches, "count": len(branches), "duration_ms": duration_ms}
+        return {
+            "success": True,
+            "repo": repo,
+            "branches": branches,
+            "count": len(branches),
+            "duration_ms": duration_ms,
+        }
     except ToolError as exc:
         return _handle_tool_error(exc, "github", "list_branches")
     finally:
@@ -392,10 +417,10 @@ async def list_branches(
 async def get_workflow_runs(
     repo: str,
     workflow_id: str,
-    branch: Optional[str] = Query(default=None),
+    branch: str | None = Query(default=None),
     per_page: int = Query(default=10, ge=1, le=100),
     client: GitHubClient = Depends(get_github_client),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch recent workflow run records."""
     start = time.monotonic()
     try:
@@ -434,6 +459,7 @@ async def get_workflow_runs(
 # Terminal endpoints
 # --------------------------------------------------------------------------- #
 
+
 @router.post(
     "/terminal/run",
     summary="Run a shell command",
@@ -442,7 +468,7 @@ async def get_workflow_runs(
 async def run_command(
     request: RunCommandRequest,
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute a shell command and return its output."""
     if request.sandboxed:
         result = await executor.run_in_sandbox(
@@ -477,7 +503,7 @@ async def run_command(
 async def run_tests(
     request: RunTestsRequest,
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute the test suite and return results."""
     result = await executor.run_tests(
         cwd=request.cwd,
@@ -503,7 +529,7 @@ async def run_tests(
 async def run_lint(
     request: RunLintRequest,
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute the linter and return findings."""
     result = await executor.run_lint(cwd=request.cwd, format_output=request.format_output)
     return {
@@ -525,7 +551,7 @@ async def run_type_check(
     cwd: str = Body(default="."),
     target: str = Body(default="."),
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute mypy and return type error findings."""
     result = await executor.run_type_check(cwd=cwd, target=target)
     return {
@@ -546,7 +572,7 @@ async def run_migrations(
     cwd: str = Body(default="."),
     target: str = Body(default="head"),
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute Alembic migrations."""
     result = await executor.run_migrations(cwd=cwd, target=target)
     return {
@@ -567,7 +593,7 @@ async def npm_install(
     cwd: str = Body(default="frontend"),
     ci: bool = Body(default=False),
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Install npm dependencies."""
     result = await executor.npm_install(cwd=cwd, ci=ci)
     return {
@@ -588,7 +614,7 @@ async def build_frontend(
     cwd: str = Body(default="frontend"),
     script: str = Body(default="build"),
     executor: TerminalExecutor = Depends(get_terminal_executor),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build the frontend project."""
     result = await executor.build_frontend(cwd=cwd, script=script)
     return {
@@ -604,6 +630,7 @@ async def build_frontend(
 # Deployment endpoints
 # --------------------------------------------------------------------------- #
 
+
 @router.post(
     "/deploy/docker",
     summary="Deploy with Docker Compose",
@@ -612,7 +639,7 @@ async def build_frontend(
 async def deploy_docker(
     request: DockerDeployRequest,
     deployer: DeploymentTool = Depends(get_deployment_tool),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Deploy services via Docker Compose and return the deployment result."""
     config = DockerDeployConfig(
         compose_file=request.compose_file,
@@ -641,7 +668,7 @@ async def deploy_docker(
 async def deploy_vercel(
     request: VercelDeployRequest,
     deployer: DeploymentTool = Depends(get_deployment_tool),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Deploy to Vercel and return the deployment URL."""
     config = VercelDeployConfig(
         project_dir=request.project_dir,
@@ -668,7 +695,7 @@ async def deploy_vercel(
 async def deploy_railway(
     request: RailwayDeployRequest,
     deployer: DeploymentTool = Depends(get_deployment_tool),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Deploy to Railway and return the deployment result."""
     config = RailwayDeployConfig(
         service=request.service,
@@ -691,6 +718,7 @@ async def deploy_railway(
 # Docker management endpoints
 # --------------------------------------------------------------------------- #
 
+
 @router.get(
     "/docker/containers",
     summary="List Docker containers",
@@ -698,9 +726,9 @@ async def deploy_railway(
 )
 async def list_containers(
     all_containers: bool = Query(default=False, description="Include stopped containers."),
-    filter_label: Optional[str] = Query(default=None, description="Filter by label key=value."),
+    filter_label: str | None = Query(default=None, description="Filter by label key=value."),
     manager: DockerManager = Depends(get_docker_manager),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return a list of Docker containers."""
     try:
         containers = manager.list_containers(
@@ -733,7 +761,7 @@ async def stop_container(
     container_id: str,
     timeout: int = Query(default=10, ge=1, le=60),
     manager: DockerManager = Depends(get_docker_manager),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Stop a Docker container by ID."""
     try:
         manager.stop_container(container_id=container_id, timeout=timeout)
@@ -751,7 +779,7 @@ async def remove_container(
     container_id: str,
     force: bool = Query(default=False, description="Force remove a running container."),
     manager: DockerManager = Depends(get_docker_manager),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Remove a Docker container."""
     try:
         manager.remove_container(container_id=container_id, force=force)
@@ -769,7 +797,7 @@ async def get_container_logs(
     container_id: str,
     tail: int = Query(default=100, ge=1, le=10000),
     manager: DockerManager = Depends(get_docker_manager),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return recent log output from a Docker container."""
     try:
         logs = manager.get_container_logs(container_id=container_id, tail=tail)
@@ -782,6 +810,7 @@ async def get_container_logs(
 # Audit trail endpoint
 # --------------------------------------------------------------------------- #
 
+
 @router.get(
     "/audit",
     summary="Get tool execution audit trail",
@@ -789,8 +818,10 @@ async def get_container_logs(
 )
 async def get_audit_trail(
     project_id: str = Query(..., description="FORGE project ID."),
-    limit: int = Query(default=50, ge=1, le=500, description="Maximum number of records to return."),
-) -> Dict[str, Any]:
+    limit: int = Query(
+        default=50, ge=1, le=500, description="Maximum number of records to return."
+    ),
+) -> dict[str, Any]:
     """Return the audit trail for tool executions in a project.
 
     In the current implementation, audit records are stored in-process
@@ -822,12 +853,13 @@ async def get_audit_trail(
 # Health check for the tools subsystem
 # --------------------------------------------------------------------------- #
 
+
 @router.get(
     "/health",
     summary="Tools subsystem health",
     description="Check availability of all underlying tool backends.",
 )
-async def tools_health() -> Dict[str, Any]:
+async def tools_health() -> dict[str, Any]:
     """Return the health status of each tool backend."""
     docker_manager = DockerManager()
     docker_available = docker_manager.ping()

@@ -16,27 +16,26 @@ The ``execute()`` method orchestrates the full agent lifecycle:
 
 from __future__ import annotations
 
-import fnmatch
-import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+import fnmatch
+import re
 import time
+from typing import Any
 
 import tiktoken
 
+from system.core.orchestration.task_schemas import TaskNode
+from system.core.planning.schemas import ArchitecturePlan
+from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
 from system.shared.constants import (
     DEFAULT_LLM_MODEL,
     MAX_TOKENS_PER_AGENT,
 )
-from system.shared.exceptions import AgentError, ValidationError
+from system.shared.exceptions import AgentError
+from system.shared.llm_client import LLMMessage, LLMResponse
 from system.shared.models import AgentType
-from system.shared.llm_client import LLMMessage, LLMResponse, get_llm_client
-from system.core.orchestration.task_schemas import TaskNode
-from system.core.specification.schemas import ProjectSpec
-from system.core.planning.schemas import ArchitecturePlan
-
 
 # ============================================================================ #
 # AgentContract
@@ -83,10 +82,10 @@ class AgentContract:
 
     identity: str
     objective: str
-    allowed_files: List[str]
-    constraints: List[str]
-    validation_rules: List[str]
-    success_criteria: List[str]
+    allowed_files: list[str]
+    constraints: list[str]
+    validation_rules: list[str]
+    success_criteria: list[str]
     max_tokens: int = MAX_TOKENS_PER_AGENT
     temperature: float = 0.1
     model: str = DEFAULT_LLM_MODEL
@@ -128,10 +127,10 @@ class AgentContext:
 
     task: TaskNode
     contract: AgentContract
-    scoped_files: Dict[str, str]
-    spec: Optional[ProjectSpec] = None
-    arch_plan: Optional[ArchitecturePlan] = None
-    additional_context: Dict[str, Any] = field(default_factory=dict)
+    scoped_files: dict[str, str]
+    spec: ProjectSpec | None = None
+    arch_plan: ArchitecturePlan | None = None
+    additional_context: dict[str, Any] = field(default_factory=dict)
     token_budget: int = MAX_TOKENS_PER_AGENT
     tokens_used: int = 0
 
@@ -180,12 +179,12 @@ class AgentResult:
     agent_type: AgentType
     task_id: str
     success: bool
-    generated_files: Dict[str, str]
-    modifications: Dict[str, str]
-    deleted_files: List[str]
+    generated_files: dict[str, str]
+    modifications: dict[str, str]
+    deleted_files: list[str]
     validation_passed: bool
-    errors: List[str]
-    warnings: List[str]
+    errors: list[str]
+    warnings: list[str]
     reasoning: str
     tokens_used: int
     duration_ms: float = 0.0
@@ -326,11 +325,11 @@ class BaseAgent(ABC):
             scoped_files=len(context.scoped_files),
         )
 
-        errors: List[str] = []
-        warnings: List[str] = []
-        generated_files: Dict[str, str] = {}
-        modifications: Dict[str, str] = {}
-        deleted_files: List[str] = []
+        errors: list[str] = []
+        warnings: list[str] = []
+        generated_files: dict[str, str] = {}
+        modifications: dict[str, str] = {}
+        deleted_files: list[str] = []
         reasoning: str = ""
         tokens_used: int = 0
 
@@ -356,7 +355,7 @@ class BaseAgent(ABC):
                 )
 
             # 3. LLM call
-            messages: List[LLMMessage] = [
+            messages: list[LLMMessage] = [
                 LLMMessage(role="user", content=user_message),
             ]
 
@@ -456,7 +455,7 @@ class BaseAgent(ABC):
             )
             raise AgentError(
                 message=f"Agent {self.agent_type.value} failed on task "
-                        f"{context.task.task_id}: {exc}",
+                f"{context.task.task_id}: {exc}",
                 details={"task_id": context.task.task_id, "original_error": str(exc)},
             ) from exc
 
@@ -481,17 +480,14 @@ class BaseAgent(ABC):
         str
             The complete user message string.
         """
-        parts: List[str] = []
+        parts: list[str] = []
 
         # ── Task description ─────────────────────────────────────────────────
         parts.append("## TASK")
         parts.append(f"**Task ID:** `{context.task.task_id}`")
         parts.append(f"**Task Name:** {context.task.name}")
         parts.append(f"**Description:**\n{context.task.description}")
-        parts.append(
-            f"**Priority:** {context.task.priority}  "
-            f"**Phase:** {context.task.phase}"
-        )
+        parts.append(f"**Priority:** {context.task.priority}  **Phase:** {context.task.phase}")
 
         if context.task.output_artifacts:
             parts.append("\n**Expected Output Files:**")
@@ -521,20 +517,16 @@ class BaseAgent(ABC):
         if context.spec is not None:
             parts.append("\n## PROJECT SPECIFICATION SUMMARY")
             parts.append(
-                f"**Tech Stack:** "
-                + ", ".join(
-                    f"{k}: {v}" for k, v in context.spec.tech_stack.items()
-                )
+                "**Tech Stack:** "
+                + ", ".join(f"{k}: {v}" for k, v in context.spec.tech_stack.items())
             )
             parts.append(f"**Complexity:** {context.spec.estimated_complexity}")
 
             # DB tables
             if context.spec.db_schema.tables:
                 parts.append(
-                    f"\n**Database Tables:** "
-                    + ", ".join(
-                        f"`{t.name}`" for t in context.spec.db_schema.tables
-                    )
+                    "\n**Database Tables:** "
+                    + ", ".join(f"`{t.name}`" for t in context.spec.db_schema.tables)
                 )
 
             # API summary
@@ -548,11 +540,8 @@ class BaseAgent(ABC):
         if context.arch_plan is not None:
             parts.append("\n## ARCHITECTURE PLAN SUMMARY")
             if hasattr(context.arch_plan, "services"):
-                svc_names = [
-                    getattr(s, "name", str(s))
-                    for s in context.arch_plan.services
-                ]
-                parts.append(f"**Services:** " + ", ".join(f"`{n}`" for n in svc_names))
+                svc_names = [getattr(s, "name", str(s)) for s in context.arch_plan.services]
+                parts.append("**Services:** " + ", ".join(f"`{n}`" for n in svc_names))
 
         # ── Additional context from runner / previous tasks ──────────────────
         if context.additional_context:
@@ -563,34 +552,39 @@ class BaseAgent(ABC):
                     parts.append(value)
                 else:
                     import json
+
                     parts.append(f"```json\n{json.dumps(value, indent=2, default=str)}\n```")
 
         # ── Scoped file contents ─────────────────────────────────────────────
         if context.scoped_files:
-            parts.append(
-                f"\n## EXISTING FILES IN SCOPE ({len(context.scoped_files)} files)"
-            )
-            parts.append(
-                "_These are the current contents of files you may read or modify._\n"
-            )
+            parts.append(f"\n## EXISTING FILES IN SCOPE ({len(context.scoped_files)} files)")
+            parts.append("_These are the current contents of files you may read or modify._\n")
             for path, content in context.scoped_files.items():
                 # Infer language from extension for the code fence
                 ext = path.rsplit(".", 1)[-1] if "." in path else "text"
                 lang_map = {
-                    "py": "python", "ts": "typescript", "tsx": "typescript",
-                    "js": "javascript", "jsx": "javascript", "tf": "hcl",
-                    "yaml": "yaml", "yml": "yaml", "json": "json",
-                    "sh": "bash", "md": "markdown", "sql": "sql",
-                    "toml": "toml", "ini": "ini", "env": "bash",
+                    "py": "python",
+                    "ts": "typescript",
+                    "tsx": "typescript",
+                    "js": "javascript",
+                    "jsx": "javascript",
+                    "tf": "hcl",
+                    "yaml": "yaml",
+                    "yml": "yaml",
+                    "json": "json",
+                    "sh": "bash",
+                    "md": "markdown",
+                    "sql": "sql",
+                    "toml": "toml",
+                    "ini": "ini",
+                    "env": "bash",
                 }
                 lang = lang_map.get(ext, ext)
                 parts.append(f"### FILE: {path}")
                 parts.append(f"```{lang}\n{content}\n```")
         else:
             parts.append("\n## EXISTING FILES IN SCOPE")
-            parts.append(
-                "_No existing files are in scope — you are creating new files._"
-            )
+            parts.append("_No existing files are in scope — you are creating new files._")
 
         # ── Final instruction ─────────────────────────────────────────────────
         parts.append("\n## INSTRUCTIONS")
@@ -626,7 +620,7 @@ class BaseAgent(ABC):
     # LLM output parsing
     # ---------------------------------------------------------------------- #
 
-    def _parse_llm_file_output(self, response: str) -> Dict[str, str]:
+    def _parse_llm_file_output(self, response: str) -> dict[str, str]:
         """Parse LLM response and extract all FILE blocks.
 
         Expects blocks in the format::
@@ -647,7 +641,7 @@ class BaseAgent(ABC):
             Mapping of ``{relative_path: file_contents}``.  An empty dict is
             returned if no valid FILE blocks are found.
         """
-        result: Dict[str, str] = {}
+        result: dict[str, str] = {}
         matches = self._FILE_BLOCK_RE.finditer(response)
 
         for match in matches:
@@ -758,7 +752,7 @@ def _glob_to_regex(glob_pattern: str) -> str:
         A regex pattern string usable with ``re.fullmatch()``.
     """
     parts = re.split(r"(\*\*)", glob_pattern)
-    regex_parts: List[str] = []
+    regex_parts: list[str] = []
     for part in parts:
         if part == "**":
             regex_parts.append(".*")

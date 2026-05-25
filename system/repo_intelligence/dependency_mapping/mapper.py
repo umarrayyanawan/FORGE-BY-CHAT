@@ -7,10 +7,8 @@ and impact analysis.
 
 from __future__ import annotations
 
-import os
-import re
 from collections import defaultdict, deque
-from typing import Dict, List, Optional, Set
+import os
 
 from system.observability.logging.logger import get_logger
 from system.repo_intelligence.ast.parser import ASTParser
@@ -34,9 +32,7 @@ class DependencyMapper:
     # Project-wide mapping
     # ------------------------------------------------------------------
 
-    async def map_project(
-        self, project_id: str, root_path: str
-    ) -> Dict[str, List[str]]:
+    async def map_project(self, project_id: str, root_path: str) -> dict[str, list[str]]:
         """Walk all supported files under *root_path* and build the graph.
 
         Args:
@@ -62,19 +58,17 @@ class DependencyMapper:
             project_id,
         )
 
-        dep_map: Dict[str, List[str]] = {}
-        all_chunks: List[CodeChunk] = []
+        dep_map: dict[str, list[str]] = {}
+        all_chunks: list[CodeChunk] = []
 
         for file_path in all_files:
             try:
                 chunks = self._parser.parse_file(file_path, project_id)
                 all_chunks.extend(chunks)
-                resolved: List[str] = []
+                resolved: list[str] = []
                 for chunk in chunks:
                     for raw_import in chunk.dependencies:
-                        resolved_path = self._resolve_import_path(
-                            raw_import, file_path, root_path
-                        )
+                        resolved_path = self._resolve_import_path(raw_import, file_path, root_path)
                         if resolved_path and resolved_path not in resolved:
                             resolved.append(resolved_path)
                 dep_map[file_path] = resolved
@@ -110,7 +104,7 @@ class DependencyMapper:
 
         Removes existing chunk nodes for the file and re-parses.
         """
-        root = self._guess_root(file_path)
+        self._guess_root(file_path)
         try:
             chunks = self._parser.parse_file(file_path, project_id)
         except RepoIntelligenceError as exc:
@@ -132,9 +126,7 @@ class DependencyMapper:
 
         for chunk in chunks:
             await self._graph.upsert_chunk_node(project_id, chunk)
-            await self._graph._create_contains_edge(
-                project_id, chunk.file_path, chunk.chunk_id
-            )
+            await self._graph._create_contains_edge(project_id, chunk.file_path, chunk.chunk_id)
 
         logger.info("Updated index for %s (%d chunks)", file_path, len(chunks))
 
@@ -142,7 +134,7 @@ class DependencyMapper:
     # Topological sort (build order)
     # ------------------------------------------------------------------
 
-    async def get_build_order(self, project_id: str) -> List[str]:
+    async def get_build_order(self, project_id: str) -> list[str]:
         """Return files in dependency order (leaves first).
 
         Uses Kahn's algorithm on the graph stored in Neo4j.
@@ -161,9 +153,9 @@ class DependencyMapper:
             {"pid": project_id},
         )
 
-        in_degree: Dict[str, int] = defaultdict(int)
-        adjacency: Dict[str, List[str]] = defaultdict(list)
-        all_nodes: Set[str] = set()
+        in_degree: dict[str, int] = defaultdict(int)
+        adjacency: dict[str, list[str]] = defaultdict(list)
+        all_nodes: set[str] = set()
 
         for r in records:
             f, t = r.get("from_path"), r.get("to_path")
@@ -174,8 +166,8 @@ class DependencyMapper:
 
         # All nodes with zero in-degree (no deps)
         queue: deque = deque([n for n in all_nodes if in_degree[n] == 0])
-        order: List[str] = []
-        visited: Set[str] = set()
+        order: list[str] = []
+        visited: set[str] = set()
 
         while queue:
             node = queue.popleft()
@@ -199,7 +191,7 @@ class DependencyMapper:
     # Circular dependency detection
     # ------------------------------------------------------------------
 
-    async def detect_circular_deps(self, project_id: str) -> List[List[str]]:
+    async def detect_circular_deps(self, project_id: str) -> list[list[str]]:
         """Return all circular dependency chains found in the project graph."""
         return await self._graph.find_cycles(project_id)
 
@@ -207,9 +199,7 @@ class DependencyMapper:
     # Impact analysis
     # ------------------------------------------------------------------
 
-    async def get_affected_files(
-        self, project_id: str, changed_files: List[str]
-    ) -> List[str]:
+    async def get_affected_files(self, project_id: str, changed_files: list[str]) -> list[str]:
         """Return all files affected by changes to *changed_files*.
 
         Includes the changed files themselves plus anything that imports them
@@ -222,7 +212,7 @@ class DependencyMapper:
         Returns:
             Deduplicated list of affected file paths.
         """
-        affected: Set[str] = set(changed_files)
+        affected: set[str] = set(changed_files)
         for fp in changed_files:
             try:
                 impact = await self._graph.get_impact_set(project_id, fp)
@@ -235,9 +225,7 @@ class DependencyMapper:
     # Import path resolution
     # ------------------------------------------------------------------
 
-    def _resolve_import_path(
-        self, import_statement: str, from_file: str, root: str
-    ) -> Optional[str]:
+    def _resolve_import_path(self, import_statement: str, from_file: str, root: str) -> str | None:
         """Attempt to resolve an import string to a file path on disk.
 
         Handles:
@@ -294,12 +282,20 @@ class DependencyMapper:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _collect_files(self, root_path: str) -> List[str]:
+    def _collect_files(self, root_path: str) -> list[str]:
         """Walk *root_path* recursively and return all supported source files."""
-        files: List[str] = []
+        files: list[str] = []
         skip_dirs = {
-            ".git", "__pycache__", "node_modules", ".venv", "venv",
-            ".mypy_cache", ".pytest_cache", "dist", "build", ".next",
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+            ".mypy_cache",
+            ".pytest_cache",
+            "dist",
+            "build",
+            ".next",
         }
         for dirpath, dirnames, filenames in os.walk(root_path):
             # Prune skip directories in-place

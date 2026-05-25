@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.core.deployment.cicd import CICDBuilder
 from system.core.deployment.health_checker import HealthChecker
@@ -34,8 +34,8 @@ class DeploymentEngine:
         health_checker: HealthChecker,
         rollback_manager: RollbackManager,
         secrets_manager: SecretsManager,
-        cicd_builder: Optional[CICDBuilder] = None,
-        db: Optional[Any] = None,
+        cicd_builder: CICDBuilder | None = None,
+        db: Any | None = None,
     ) -> None:
         self.provisioner = provisioner
         self.health_checker = health_checker
@@ -44,7 +44,7 @@ class DeploymentEngine:
         self.cicd_builder = cicd_builder
         self.db = db
         # In-memory registry: deployment_id → DeploymentRecord
-        self._records: Dict[str, DeploymentRecord] = {}
+        self._records: dict[str, DeploymentRecord] = {}
 
     # ------------------------------------------------------------------
     # Core deploy flow
@@ -70,18 +70,12 @@ class DeploymentEngine:
         )
 
         # 1. Inject secrets.
-        secrets = await self.secrets_manager.inject_into_env(
-            config.project_id, config.environment
-        )
+        secrets = await self.secrets_manager.inject_into_env(config.project_id, config.environment)
         merged_env = {**config.env_vars, **secrets}
-        effective_config = DeploymentConfig(
-            **{**config.model_dump(), "env_vars": merged_env}
-        )
+        effective_config = DeploymentConfig(**{**config.model_dump(), "env_vars": merged_env})
 
         # 2. Find the current live deployment (to set as previous for rollback).
-        previous_id = self._find_latest_deployment_id(
-            config.project_id, config.environment
-        )
+        previous_id = self._find_latest_deployment_id(config.project_id, config.environment)
 
         # 3. Provision infrastructure.
         resource_id = await self.provisioner.provision(effective_config)
@@ -152,9 +146,7 @@ class DeploymentEngine:
             can_roll = await self.rollback_manager.can_rollback(record.deployment_id)
             if can_roll:
                 try:
-                    rollback_record = await self.rollback_manager.rollback(
-                        record.deployment_id
-                    )
+                    rollback_record = await self.rollback_manager.rollback(record.deployment_id)
                     self._records[rollback_record.deployment_id] = rollback_record
                     logger.info(
                         "Automatic rollback succeeded",
@@ -178,18 +170,18 @@ class DeploymentEngine:
     # Query / introspection
     # ------------------------------------------------------------------
 
-    async def get_deployment(self, deployment_id: str) -> Optional[DeploymentRecord]:
+    async def get_deployment(self, deployment_id: str) -> DeploymentRecord | None:
         """Return the :class:`DeploymentRecord` for *deployment_id*, or ``None``."""
         return self._records.get(deployment_id)
 
-    async def list_deployments(self, project_id: str) -> List[DeploymentRecord]:
+    async def list_deployments(self, project_id: str) -> list[DeploymentRecord]:
         """Return all deployments for *project_id*, newest first."""
         records = [r for r in self._records.values() if r.project_id == project_id]
         return sorted(records, key=lambda r: r.created_at, reverse=True)
 
     async def get_latest_deployment(
         self, project_id: str, environment: str
-    ) -> Optional[DeploymentRecord]:
+    ) -> DeploymentRecord | None:
         """Return the most recent deployment for *project_id* + *environment*."""
         records = [
             r
@@ -225,16 +217,12 @@ class DeploymentEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _find_latest_deployment_id(
-        self, project_id: str, environment: str
-    ) -> Optional[str]:
+    def _find_latest_deployment_id(self, project_id: str, environment: str) -> str | None:
         """Return the deployment_id of the current live deployment, if any."""
         candidates = [
             r
             for r in self._records.values()
-            if r.project_id == project_id
-            and r.environment == environment
-            and r.status == "success"
+            if r.project_id == project_id and r.environment == environment and r.status == "success"
         ]
         if not candidates:
             return None

@@ -9,17 +9,15 @@ Both :class:`IntentSession` and :class:`ProjectIntent` objects are persisted.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from typing import List, Optional
+import json
 
-from sqlalchemy import String, Text, Integer, DateTime, select
+from sqlalchemy import DateTime, Integer, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
 from system.observability.logging.logger import get_logger
 from system.shared.database import Base
-from system.shared.exceptions import IntentError
 
 from .schemas import IntentSession, IntentStatus, ProjectIntent
 
@@ -92,7 +90,7 @@ class IntentSessionDB(Base):  # type: ignore[valid-type,misc]
         )
 
     @classmethod
-    def from_intent_session(cls, session: IntentSession) -> "IntentSessionDB":
+    def from_intent_session(cls, session: IntentSession) -> IntentSessionDB:
         """Serialise an :class:`IntentSession` into an ORM row."""
         return cls(
             session_id=session.session_id,
@@ -164,14 +162,16 @@ class IntentPersistence:
                 _SESSION_TTL_SECONDS,
             )
         except Exception as exc:
-            self._log.error("redis_session_save_failed", error=str(exc), session_id=session.session_id)
+            self._log.error(
+                "redis_session_save_failed", error=str(exc), session_id=session.session_id
+            )
 
         # --- PostgreSQL ---
         try:
             existing = await self._db.execute(
                 select(IntentSessionDB).where(IntentSessionDB.session_id == session.session_id)
             )
-            row: Optional[IntentSessionDB] = existing.scalar_one_or_none()
+            row: IntentSessionDB | None = existing.scalar_one_or_none()
 
             if row is None:
                 row = IntentSessionDB.from_intent_session(session)
@@ -189,7 +189,7 @@ class IntentPersistence:
             self._log.error("db_session_save_failed", error=str(exc), session_id=session.session_id)
             # Non-fatal — the Redis write succeeded
 
-    async def load_session(self, session_id: str) -> Optional[IntentSession]:
+    async def load_session(self, session_id: str) -> IntentSession | None:
         """Load a session from Redis (hot path) or fall back to Postgres.
 
         Parameters
@@ -287,7 +287,7 @@ class IntentPersistence:
             await self._db.rollback()
             self._log.error("db_intent_save_failed", error=str(exc), project_id=project_id)
 
-    async def load_intent(self, project_id: str) -> Optional[ProjectIntent]:
+    async def load_intent(self, project_id: str) -> ProjectIntent | None:
         """Load the validated project intent.
 
         Parameters
@@ -338,7 +338,7 @@ class IntentPersistence:
     # Session listing
     # ---------------------------------------------------------------------- #
 
-    async def list_sessions(self, project_id: str) -> List[IntentSession]:
+    async def list_sessions(self, project_id: str) -> list[IntentSession]:
         """Return all sessions for a given project, newest first.
 
         Queries Postgres directly for a consistent, ordered view.

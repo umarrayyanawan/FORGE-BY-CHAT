@@ -7,8 +7,8 @@ layer, and exposes a clean async API consumed by the FastAPI router.
 
 from __future__ import annotations
 
+from typing import Any
 import uuid
-from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,7 +172,7 @@ class IntentEngine:
 
         return await self._decide_and_respond(updated_session)
 
-    async def get_session(self, session_id: str) -> Optional[IntentSession]:
+    async def get_session(self, session_id: str) -> IntentSession | None:
         """Retrieve a session by its identifier.
 
         Parameters
@@ -187,7 +187,7 @@ class IntentEngine:
         """
         return await self._persistence.load_session(session_id)
 
-    async def get_intent(self, project_id: str) -> Optional[ProjectIntent]:
+    async def get_intent(self, project_id: str) -> ProjectIntent | None:
         """Retrieve the validated project intent.
 
         Parameters
@@ -243,9 +243,7 @@ class IntentEngine:
         else:
             return await self._build_complete_response(session)
 
-    async def _build_clarification_response(
-        self, session: IntentSession
-    ) -> IntentParseResponse:
+    async def _build_clarification_response(self, session: IntentSession) -> IntentParseResponse:
         """Generate clarification questions and persist the session state."""
         questions = await self._clarifier.generate_questions(
             intent=session.intent,
@@ -296,9 +294,7 @@ class IntentEngine:
             is_complete=False,
         )
 
-    async def _build_complete_response(
-        self, session: IntentSession
-    ) -> IntentParseResponse:
+    async def _build_complete_response(self, session: IntentSession) -> IntentParseResponse:
         """Validate and persist the final intent, then return the complete response."""
         self._log.info(
             "finalising_intent",
@@ -312,14 +308,15 @@ class IntentEngine:
         except IntentError:
             # Validation raised — if there are still missing fields, attempt one
             # more clarification round before propagating the error.
-            if session.intent.missing_fields and session.clarification_round < MAX_INTENT_CLARIFICATION_ROUNDS:
+            if (
+                session.intent.missing_fields
+                and session.clarification_round < MAX_INTENT_CLARIFICATION_ROUNDS
+            ):
                 return await self._build_clarification_response(session)
             raise
 
         # Mark intent as validated
-        validated_intent = session.intent.model_copy(
-            update={"status": IntentStatus.VALIDATED}
-        )
+        validated_intent = session.intent.model_copy(update={"status": IntentStatus.VALIDATED})
         validated_session = session.model_copy(
             update={
                 "intent": validated_intent,
@@ -352,9 +349,7 @@ class IntentEngine:
     # Session management helpers
     # ---------------------------------------------------------------------- #
 
-    async def _get_or_create_session(
-        self, request: IntentParseRequest
-    ) -> IntentSession:
+    async def _get_or_create_session(self, request: IntentParseRequest) -> IntentSession:
         """Load an existing session or create a new one."""
         if request.session_id:
             session = await self._persistence.load_session(request.session_id)

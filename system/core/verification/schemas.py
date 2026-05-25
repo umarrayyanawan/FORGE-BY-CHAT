@@ -5,7 +5,7 @@ Defines ValidationCheck, VerificationReport, and SelfHealingAttempt.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field
 
@@ -19,14 +19,13 @@ class ValidationCheck(BaseForgeModel):
     check_type: str = Field(
         ...,
         description=(
-            "Category of check: 'lint' | 'type_check' | 'test' | "
-            "'coverage' | 'security' | 'arch'"
+            "Category of check: 'lint' | 'type_check' | 'test' | 'coverage' | 'security' | 'arch'"
         ),
     )
     name: str = Field(..., description="Human-readable check name, e.g. 'ruff lint'.")
     status: ValidationStatus = Field(..., description="Pass/fail/warn/skip result.")
     message: str = Field(default="", description="Human-readable result message.")
-    details: Dict[str, Any] = Field(
+    details: dict[str, Any] = Field(
         default_factory=dict,
         description="Structured details: file path, line number, rule ID, etc.",
     )
@@ -42,7 +41,7 @@ class VerificationReport(TimestampedModel):
 
     report_id: str = Field(..., description="Unique report identifier.")
     project_id: str = Field(..., description="FORGE project this report belongs to.")
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         default=None,
         description="Task that triggered this verification (if any).",
     )
@@ -54,7 +53,7 @@ class VerificationReport(TimestampedModel):
         ...,
         description="Aggregate pass/fail derived from all individual checks.",
     )
-    checks: List[ValidationCheck] = Field(
+    checks: list[ValidationCheck] = Field(
         default_factory=list,
         description="All individual check results.",
     )
@@ -63,15 +62,15 @@ class VerificationReport(TimestampedModel):
     failed: int = Field(default=0, ge=0)
     warnings: int = Field(default=0, ge=0)
     skipped: int = Field(default=0, ge=0)
-    coverage_percent: Optional[float] = Field(
+    coverage_percent: float | None = Field(
         default=None,
         description="Code coverage percentage (populated by runtime validation).",
     )
-    error_summary: List[str] = Field(
+    error_summary: list[str] = Field(
         default_factory=list,
         description="Condensed list of error messages for quick triage.",
     )
-    fix_suggestions: List[str] = Field(
+    fix_suggestions: list[str] = Field(
         default_factory=list,
         description="Actionable fix suggestions generated from failed checks.",
     )
@@ -82,11 +81,11 @@ class VerificationReport(TimestampedModel):
         report_id: str,
         project_id: str,
         phase: str,
-        checks: List[ValidationCheck],
-        task_id: Optional[str] = None,
-        coverage_percent: Optional[float] = None,
-        fix_suggestions: Optional[List[str]] = None,
-    ) -> "VerificationReport":
+        checks: list[ValidationCheck],
+        task_id: str | None = None,
+        coverage_percent: float | None = None,
+        fix_suggestions: list[str] | None = None,
+    ) -> VerificationReport:
         """Build a VerificationReport from a list of checks, computing aggregates."""
         passed = sum(1 for c in checks if c.status == ValidationStatus.PASSED)
         failed = sum(1 for c in checks if c.status == ValidationStatus.FAILED)
@@ -139,7 +138,7 @@ class SelfHealingAttempt(TimestampedModel):
         ge=1,
         description="Which attempt number this is (1-indexed).",
     )
-    files_modified: List[str] = Field(
+    files_modified: list[str] = Field(
         default_factory=list,
         description="Paths of files rewritten during this attempt.",
     )

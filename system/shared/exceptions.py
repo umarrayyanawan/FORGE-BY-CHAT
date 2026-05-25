@@ -7,7 +7,7 @@ structured context that can be serialised into API error responses.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class ForgeError(Exception):
@@ -19,20 +19,20 @@ class ForgeError(Exception):
     def __init__(
         self,
         message: str,
-        code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        code: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         self.message = message
         # Allow per-instance override; fall back to class-level default.
         if code is not None:
             self.code = code
-        self.details: Dict[str, Any] = details or {}
+        self.details: dict[str, Any] = details or {}
         super().__init__(message)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(code={self.code!r}, message={self.message!r})"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain dict suitable for JSON API error payloads."""
         return {
             "error": self.message,

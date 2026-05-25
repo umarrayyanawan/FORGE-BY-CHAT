@@ -10,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import os
 import textwrap
-from typing import List, Optional, Tuple
 
 from system.observability.logging.logger import get_logger
 from system.repo_intelligence.schemas import CodeChunk
@@ -31,15 +30,13 @@ def _get_python_parser():
     global _PYTHON_PARSER
     if _PYTHON_PARSER is None:
         try:
-            import tree_sitter_python as tspython
             from tree_sitter import Language, Parser
+            import tree_sitter_python as tspython
 
             PY_LANGUAGE = Language(tspython.language())
             _PYTHON_PARSER = Parser(PY_LANGUAGE)
         except Exception as exc:
-            raise RepoIntelligenceError(
-                f"Failed to initialise tree-sitter Python parser: {exc}"
-            )
+            raise RepoIntelligenceError(f"Failed to initialise tree-sitter Python parser: {exc}")
     return _PYTHON_PARSER
 
 
@@ -47,8 +44,8 @@ def _get_ts_parser():
     global _TS_PARSER
     if _TS_PARSER is None:
         try:
-            import tree_sitter_typescript as tsts
             from tree_sitter import Language, Parser
+            import tree_sitter_typescript as tsts
 
             TS_LANGUAGE = Language(tsts.language_typescript())
             _TS_PARSER = Parser(TS_LANGUAGE)
@@ -63,8 +60,8 @@ def _get_js_parser():
     global _JS_PARSER
     if _JS_PARSER is None:
         try:
-            import tree_sitter_javascript as tsjs
             from tree_sitter import Language, Parser
+            import tree_sitter_javascript as tsjs
 
             JS_LANGUAGE = Language(tsjs.language())
             _JS_PARSER = Parser(JS_LANGUAGE)
@@ -89,11 +86,11 @@ def _node_text(node, source_bytes: bytes) -> str:
     return source_bytes[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
 
-def _node_lines(node) -> Tuple[int, int]:
+def _node_lines(node) -> tuple[int, int]:
     return node.start_point[0] + 1, node.end_point[0] + 1
 
 
-def _find_docstring(node, source_bytes: bytes) -> Optional[str]:
+def _find_docstring(node, source_bytes: bytes) -> str | None:
     """Return docstring of a function/class body, or None."""
     for child in node.children:
         if child.type in ("block", "suite", "statement_block"):
@@ -125,7 +122,7 @@ class ASTParser:
     # Public API
     # ------------------------------------------------------------------
 
-    def parse_file(self, file_path: str, project_id: str) -> List[CodeChunk]:
+    def parse_file(self, file_path: str, project_id: str) -> list[CodeChunk]:
         """Parse *file_path* and return a list of CodeChunk records.
 
         Args:
@@ -166,7 +163,9 @@ class ASTParser:
             if language == "python":
                 return self._parse_python(source_str, source_bytes, file_path, project_id)
             else:
-                return self._parse_typescript(source_str, source_bytes, file_path, project_id, language)
+                return self._parse_typescript(
+                    source_str, source_bytes, file_path, project_id, language
+                )
         except RepoIntelligenceError:
             raise
         except Exception as exc:
@@ -185,12 +184,12 @@ class ASTParser:
         source_bytes: bytes,
         file_path: str,
         project_id: str,
-    ) -> List[CodeChunk]:
+    ) -> list[CodeChunk]:
         parser = _get_python_parser()
         tree = parser.parse(source_bytes)
         root = tree.root_node
 
-        chunks: List[CodeChunk] = []
+        chunks: list[CodeChunk] = []
         imports = self._extract_imports(root, source_bytes, "python")
         exports = self._extract_exports(root, source_bytes, "python")
 
@@ -235,7 +234,7 @@ class ASTParser:
         # Add standalone import chunk if file has imports
         if imports:
             import_lines = [
-                l for l in lines if l.startswith("import ") or l.startswith("from ")
+                line for line in lines if line.startswith("import ") or line.startswith("from ")
             ]
             if import_lines:
                 end_ln = min(len(import_lines) + 1, len(lines))
@@ -257,13 +256,13 @@ class ASTParser:
 
         return chunks
 
-    def _get_module_docstring_python(self, root, source_bytes: bytes) -> Optional[str]:
+    def _get_module_docstring_python(self, root, source_bytes: bytes) -> str | None:
         for child in root.children:
             if child.type == "expression_statement":
                 for inner in child.children:
                     if inner.type == "string":
                         raw = _node_text(inner, source_bytes)
-                        return raw.strip('"\'').strip()
+                        return raw.strip("\"'").strip()
             elif child.type not in ("comment", "newline"):
                 break
         return None
@@ -274,9 +273,9 @@ class ASTParser:
         source_bytes: bytes,
         file_path: str,
         project_id: str,
-        imports: List[str],
-        exports: List[str],
-    ) -> List[CodeChunk]:
+        imports: list[str],
+        exports: list[str],
+    ) -> list[CodeChunk]:
         name_node = node.child_by_field_name("name")
         name = _node_text(name_node, source_bytes) if name_node else "unknown"
         start_line, end_line = _node_lines(node)
@@ -306,10 +305,10 @@ class ASTParser:
         source_bytes: bytes,
         file_path: str,
         project_id: str,
-        imports: List[str],
-        exports: List[str],
-    ) -> List[CodeChunk]:
-        chunks: List[CodeChunk] = []
+        imports: list[str],
+        exports: list[str],
+    ) -> list[CodeChunk]:
+        chunks: list[CodeChunk] = []
         name_node = node.child_by_field_name("name")
         class_name = _node_text(name_node, source_bytes) if name_node else "Unknown"
         start_line, end_line = _node_lines(node)
@@ -349,9 +348,7 @@ class ASTParser:
                     method_content = _node_text(child, source_bytes)
                     method_doc = _find_docstring(child, source_bytes)
                     method_chunk = CodeChunk(
-                        chunk_id=_make_chunk_id(
-                            file_path, f"{class_name}.{method_name}", m_start
-                        ),
+                        chunk_id=_make_chunk_id(file_path, f"{class_name}.{method_name}", m_start),
                         file_path=file_path,
                         chunk_type="method",
                         name=f"{class_name}.{method_name}",
@@ -379,7 +376,7 @@ class ASTParser:
         file_path: str,
         project_id: str,
         language: str,
-    ) -> List[CodeChunk]:
+    ) -> list[CodeChunk]:
         if language in ("typescript",):
             parser = _get_ts_parser()
         else:
@@ -388,15 +385,13 @@ class ASTParser:
         tree = parser.parse(source_bytes)
         root = tree.root_node
 
-        chunks: List[CodeChunk] = []
+        chunks: list[CodeChunk] = []
         imports = self._extract_imports(root, source_bytes, language)
         exports = self._extract_exports(root, source_bytes, language)
 
         if imports:
             import_lines = [
-                l.strip()
-                for l in source.splitlines()
-                if l.strip().startswith("import ")
+                ln.strip() for ln in source.splitlines() if ln.strip().startswith("import ")
             ]
             if import_lines:
                 chunks.append(
@@ -426,7 +421,7 @@ class ASTParser:
         TS_INTERFACE_TYPES = {"interface_declaration"}
         TS_TYPE_ALIAS = {"type_alias_declaration"}
 
-        def visit(node, parent_class: Optional[str] = None):
+        def visit(node, parent_class: str | None = None):
             if node.type in TS_FUNCTION_TYPES:
                 name = self._ts_node_name(node, source_bytes, parent_class)
                 start_line, end_line = _node_lines(node)
@@ -448,9 +443,7 @@ class ASTParser:
 
             elif node.type in TS_CLASS_TYPES:
                 name_node = node.child_by_field_name("name")
-                class_name = (
-                    _node_text(name_node, source_bytes) if name_node else "Anonymous"
-                )
+                class_name = _node_text(name_node, source_bytes) if name_node else "Anonymous"
                 start_line, end_line = _node_lines(node)
                 content = _node_text(node, source_bytes)
                 chunks.append(
@@ -474,9 +467,7 @@ class ASTParser:
 
             elif node.type in TS_INTERFACE_TYPES:
                 name_node = node.child_by_field_name("name")
-                iface_name = (
-                    _node_text(name_node, source_bytes) if name_node else "Interface"
-                )
+                iface_name = _node_text(name_node, source_bytes) if name_node else "Interface"
                 start_line, end_line = _node_lines(node)
                 chunks.append(
                     CodeChunk(
@@ -496,9 +487,7 @@ class ASTParser:
 
             elif node.type in TS_TYPE_ALIAS:
                 name_node = node.child_by_field_name("name")
-                type_name = (
-                    _node_text(name_node, source_bytes) if name_node else "Type"
-                )
+                type_name = _node_text(name_node, source_bytes) if name_node else "Type"
                 start_line, end_line = _node_lines(node)
                 chunks.append(
                     CodeChunk(
@@ -525,9 +514,7 @@ class ASTParser:
 
         return chunks
 
-    def _ts_node_name(
-        self, node, source_bytes: bytes, parent_class: Optional[str]
-    ) -> str:
+    def _ts_node_name(self, node, source_bytes: bytes, parent_class: str | None) -> str:
         name_node = node.child_by_field_name("name")
         if name_node:
             base = _node_text(name_node, source_bytes)
@@ -538,8 +525,8 @@ class ASTParser:
     # Import / export extraction
     # ------------------------------------------------------------------
 
-    def _extract_imports(self, root, source_bytes: bytes, language: str) -> List[str]:
-        imports: List[str] = []
+    def _extract_imports(self, root, source_bytes: bytes, language: str) -> list[str]:
+        imports: list[str] = []
         if language == "python":
             for node in self._walk(root):
                 if node.type == "import_statement":
@@ -565,8 +552,8 @@ class ASTParser:
                         imports.append(raw)
         return list(dict.fromkeys(imports))  # deduplicate, preserve order
 
-    def _extract_exports(self, root, source_bytes: bytes, language: str) -> List[str]:
-        exports: List[str] = []
+    def _extract_exports(self, root, source_bytes: bytes, language: str) -> list[str]:
+        exports: list[str] = []
         if language == "python":
             for node in self._walk(root):
                 if node.type == "assignment":
@@ -576,9 +563,7 @@ class ASTParser:
                         if val:
                             for item in val.children:
                                 if item.type == "string":
-                                    exports.append(
-                                        _node_text(item, source_bytes).strip("\"'")
-                                    )
+                                    exports.append(_node_text(item, source_bytes).strip("\"'"))
         else:
             for node in self._walk(root):
                 if node.type in (
@@ -596,15 +581,13 @@ class ASTParser:
     # Large-function splitter
     # ------------------------------------------------------------------
 
-    def _chunk_large_function(
-        self, chunk: CodeChunk, max_lines: int = 50
-    ) -> List[CodeChunk]:
+    def _chunk_large_function(self, chunk: CodeChunk, max_lines: int = 50) -> list[CodeChunk]:
         """Split a function chunk that exceeds *max_lines* into sub-chunks."""
         lines = chunk.content.splitlines()
         if len(lines) <= max_lines:
             return [chunk]
 
-        sub_chunks: List[CodeChunk] = []
+        sub_chunks: list[CodeChunk] = []
         overlap = 5
         part = 0
         i = 0

@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from sqlalchemy import event, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncAttrs,
     AsyncEngine,
@@ -31,10 +31,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, declared_attr
-from sqlalchemy.pool import NullPool
 
 from system.config.settings import settings
-
 
 # ========================================================================== #
 # Engines
@@ -151,6 +149,7 @@ async def check_db_connection() -> bool:
 # env.py can do:
 #   from system.shared.database import get_sync_engine_url
 #   connectable = create_engine(get_sync_engine_url())
+
 
 def get_sync_engine_url() -> str:
     """Return the synchronous database URL for Alembic env.py."""

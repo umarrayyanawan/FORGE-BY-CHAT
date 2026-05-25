@@ -3,20 +3,18 @@
 from __future__ import annotations
 
 import base64
-import hashlib
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+import hashlib
+from typing import Any
+import uuid
 
 from cryptography.fernet import Fernet
-from sqlalchemy import Column, DateTime, String, Text, select, delete
+from sqlalchemy import Column, DateTime, String, Text, delete, select
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from system.config.settings import settings
 from system.observability.logging.logger import get_logger
-from system.shared.database import Base, get_db
-from system.shared.exceptions import ForgeError
+from system.shared.database import Base
 
 logger = get_logger(__name__)
 
@@ -46,8 +44,7 @@ class SecretDB(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<SecretDB project_id={self.project_id!r} "
-            f"env={self.environment!r} key={self.key!r}>"
+            f"<SecretDB project_id={self.project_id!r} env={self.environment!r} key={self.key!r}>"
         )
 
 
@@ -68,7 +65,7 @@ class SecretsManager:
     integration tests and dry-run environments).
     """
 
-    def __init__(self, db_session_factory: Optional[Any] = None) -> None:
+    def __init__(self, db_session_factory: Any | None = None) -> None:
         # Derive a 32-byte key from the application secret and encode it as
         # URL-safe base64 as required by Fernet.
         key_bytes = hashlib.sha256(settings.secret_key.encode()).digest()
@@ -76,7 +73,7 @@ class SecretsManager:
         self._fernet = Fernet(fernet_key)
         self._db_factory = db_session_factory
         # In-memory fallback: project_id -> environment -> key -> encrypted_value
-        self._store: Dict[str, Dict[str, Dict[str, str]]] = {}
+        self._store: dict[str, dict[str, dict[str, str]]] = {}
 
     # ------------------------------------------------------------------
     # Encryption helpers
@@ -136,7 +133,7 @@ class SecretsManager:
         key: str,
         project_id: str,
         environment: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Return the decrypted secret value, or *None* if not found."""
         logger.info(
             "Retrieving secret",
@@ -189,7 +186,7 @@ class SecretsManager:
         else:
             self._store.get(project_id, {}).get(environment, {}).pop(key, None)
 
-    async def list_secrets(self, project_id: str, environment: str) -> List[str]:
+    async def list_secrets(self, project_id: str, environment: str) -> list[str]:
         """Return the list of secret *keys* (not values) for the given project/env."""
         if self._db_factory is not None:
             async with self._db_factory() as session:
@@ -202,10 +199,10 @@ class SecretsManager:
                 return [row[0] for row in result.fetchall()]
         return list(self._store.get(project_id, {}).get(environment, {}).keys())
 
-    async def inject_into_env(self, project_id: str, environment: str) -> Dict[str, str]:
+    async def inject_into_env(self, project_id: str, environment: str) -> dict[str, str]:
         """Return a dict of decrypted key→value pairs ready to merge into env_vars."""
         keys = await self.list_secrets(project_id, environment)
-        result: Dict[str, str] = {}
+        result: dict[str, str] = {}
         for key in keys:
             value = await self.get_secret(key, project_id, environment)
             if value is not None:

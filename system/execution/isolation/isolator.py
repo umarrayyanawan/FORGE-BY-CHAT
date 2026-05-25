@@ -1,10 +1,10 @@
 """Isolator — enforces resource and filesystem boundaries for agent processes."""
+
 from __future__ import annotations
 
-import resource
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+import resource
 
 from system.observability.logging.logger import get_logger
 
@@ -16,8 +16,8 @@ _DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024  # 10 MB
 
 @dataclass
 class IsolationPolicy:
-    allowed_directories: List[str]
-    blocked_commands: List[str]
+    allowed_directories: list[str]
+    blocked_commands: list[str]
     max_file_count: int = _DEFAULT_MAX_FILES
     max_output_bytes: int = _DEFAULT_MAX_OUTPUT_BYTES
     allow_network: bool = False
@@ -26,7 +26,7 @@ class IsolationPolicy:
 
 
 class Isolator:
-    def __init__(self, policy: Optional[IsolationPolicy] = None) -> None:
+    def __init__(self, policy: IsolationPolicy | None = None) -> None:
         self.policy = policy or IsolationPolicy(
             allowed_directories=["/tmp"],
             blocked_commands=["rm -rf /", "sudo", "su", "chmod 777", "curl", "wget"],
@@ -60,5 +60,5 @@ class Isolator:
             resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit))
             mem_bytes = self.policy.max_memory_mb * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-        except (ValueError, resource.error) as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("Could not set resource limits", error=str(exc))

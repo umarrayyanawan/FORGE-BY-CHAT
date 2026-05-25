@@ -6,21 +6,20 @@ into structured, validated project intent objects.
 
 from __future__ import annotations
 
+from enum import StrEnum
 import json
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import Field, field_validator, model_validator
 
 from system.shared.models import BaseForgeModel, DeployTarget, Platform, TimestampedModel
-
 
 # ========================================================================== #
 # Status enum
 # ========================================================================== #
 
 
-class IntentStatus(str, Enum):
+class IntentStatus(StrEnum):
     """Lifecycle states for an intent session."""
 
     DRAFT = "draft"
@@ -48,8 +47,7 @@ class ProjectIntent(BaseForgeModel):
     industry: str = Field(
         default="",
         description=(
-            "Business domain / industry vertical, e.g. 'real estate', "
-            "'healthcare', 'e-commerce'."
+            "Business domain / industry vertical, e.g. 'real estate', 'healthcare', 'e-commerce'."
         ),
     )
     product_type: str = Field(
@@ -71,27 +69,26 @@ class ProjectIntent(BaseForgeModel):
     )
 
     # Functional requirements
-    core_features: List[str] = Field(
+    core_features: list[str] = Field(
         default_factory=list,
         description="Ordered list of the most important features the system must have.",
     )
-    integrations: List[str] = Field(
+    integrations: list[str] = Field(
         default_factory=list,
         description=(
-            "External services / APIs to integrate with, e.g. 'Stripe', "
-            "'Twilio', 'Google OAuth'."
+            "External services / APIs to integrate with, e.g. 'Stripe', 'Twilio', 'Google OAuth'."
         ),
     )
 
     # Non-functional requirements
-    constraints: List[str] = Field(
+    constraints: list[str] = Field(
         default_factory=list,
         description=(
             "Hard constraints, e.g. 'must run offline', 'GDPR compliant', "
             "'no JavaScript frameworks'."
         ),
     )
-    security_requirements: List[str] = Field(
+    security_requirements: list[str] = Field(
         default_factory=list,
         description="Security controls required, e.g. 'MFA', 'row-level security', 'SOC 2'.",
     )
@@ -113,7 +110,7 @@ class ProjectIntent(BaseForgeModel):
     )
 
     # Technical preferences
-    tech_preferences: Dict[str, str] = Field(
+    tech_preferences: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Preferred technologies keyed by role, e.g. "
@@ -145,7 +142,7 @@ class ProjectIntent(BaseForgeModel):
             "populated.  >= 0.7 is considered sufficient to proceed."
         ),
     )
-    missing_fields: List[str] = Field(
+    missing_fields: list[str] = Field(
         default_factory=list,
         description="Field names that are empty and considered important.",
     )
@@ -160,9 +157,11 @@ class ProjectIntent(BaseForgeModel):
             return 0.0
         return max(0.0, min(1.0, f))
 
-    @field_validator("core_features", "constraints", "integrations", "security_requirements", mode="before")
+    @field_validator(
+        "core_features", "constraints", "integrations", "security_requirements", mode="before"
+    )
     @classmethod
-    def ensure_string_list(cls, v: Any) -> List[str]:
+    def ensure_string_list(cls, v: Any) -> list[str]:
         """Coerce JSON arrays and CSV strings into a clean list of strings."""
         if v is None:
             return []
@@ -223,11 +222,9 @@ class IntentSession(TimestampedModel):
         ge=0,
         description="How many clarification rounds have been completed.",
     )
-    clarification_history: List[Dict[str, str]] = Field(
+    clarification_history: list[dict[str, str]] = Field(
         default_factory=list,
-        description=(
-            "Ordered conversation log [{role: 'user'|'assistant', content: str}]."
-        ),
+        description=("Ordered conversation log [{role: 'user'|'assistant', content: str}]."),
     )
     status: IntentStatus = Field(
         default=IntentStatus.DRAFT,
@@ -248,7 +245,7 @@ class ClarificationQuestion(BaseForgeModel):
         ...,
         description="Name of the ProjectIntent field this question clarifies.",
     )
-    options: Optional[List[str]] = Field(
+    options: list[str] | None = Field(
         default=None,
         description="Optional multiple-choice options to present to the user.",
     )
@@ -259,7 +256,7 @@ class ClarificationQuestion(BaseForgeModel):
 
     @field_validator("options", mode="before")
     @classmethod
-    def filter_empty_options(cls, v: Any) -> Optional[List[str]]:
+    def filter_empty_options(cls, v: Any) -> list[str] | None:
         if v is None:
             return None
         filtered = [str(o).strip() for o in v if str(o).strip()]
@@ -270,7 +267,7 @@ class ClarificationRequest(BaseForgeModel):
     """Outbound payload sent to the user when more information is needed."""
 
     session_id: str = Field(..., description="Session this clarification belongs to.")
-    questions: List[ClarificationQuestion] = Field(
+    questions: list[ClarificationQuestion] = Field(
         ...,
         min_length=1,
         description="Ordered list of questions (max 3 per round).",
@@ -281,7 +278,7 @@ class ClarificationRequest(BaseForgeModel):
     )
 
     @model_validator(mode="after")
-    def cap_questions(self) -> "ClarificationRequest":
+    def cap_questions(self) -> ClarificationRequest:
         """Enforce the 3-question-per-round limit at the schema level."""
         if len(self.questions) > 3:
             object.__setattr__(self, "questions", self.questions[:3])
@@ -292,14 +289,14 @@ class ClarificationResponse(BaseForgeModel):
     """Inbound payload submitted by the user with their answers."""
 
     session_id: str = Field(..., description="Session this response belongs to.")
-    answers: Dict[str, str] = Field(
+    answers: dict[str, str] = Field(
         ...,
         description="Mapping of field name → user's answer string.",
     )
 
     @field_validator("answers", mode="before")
     @classmethod
-    def strip_answers(cls, v: Any) -> Dict[str, str]:
+    def strip_answers(cls, v: Any) -> dict[str, str]:
         if not isinstance(v, dict):
             return {}
         return {str(k).strip(): str(val).strip() for k, val in v.items() if val}
@@ -314,11 +311,11 @@ class IntentParseRequest(BaseForgeModel):
     """Request body for the POST /intent/parse endpoint."""
 
     prompt: str = Field(..., min_length=5, description="Raw user prompt to analyse.")
-    project_id: Optional[str] = Field(
+    project_id: str | None = Field(
         default=None,
         description="If provided, links this session to an existing FORGE project.",
     )
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         default=None,
         description="If provided, resumes an existing session.",
     )
@@ -334,14 +331,13 @@ class IntentParseResponse(BaseForgeModel):
         ...,
         description="True when the intent is incomplete and questions have been generated.",
     )
-    clarification_request: Optional[ClarificationRequest] = Field(
+    clarification_request: ClarificationRequest | None = Field(
         default=None,
         description="Questions to present to the user (populated when clarification_needed=True).",
     )
     is_complete: bool = Field(
         default=False,
         description=(
-            "True when the intent passes validation and is ready for the "
-            "Specification phase."
+            "True when the intent passes validation and is ready for the Specification phase."
         ),
     )

@@ -5,17 +5,15 @@ Runs pytest unit/integration tests, coverage analysis, and API smoke tests.
 
 from __future__ import annotations
 
-import asyncio
 import json
-import time
-import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any
+import uuid
 
 import httpx
 
 from system.observability.logging.logger import get_logger
-from system.shared.exceptions import VerificationError
 from system.shared.models import ValidationStatus
 
 from .schemas import ValidationCheck, VerificationReport
@@ -50,8 +48,8 @@ class RuntimeValidator:
         t_start = time.monotonic()
         logger.info("Starting runtime validation for project %s", project_id)
 
-        all_checks: List[ValidationCheck] = []
-        coverage_percent: Optional[float] = None
+        all_checks: list[ValidationCheck] = []
+        coverage_percent: float | None = None
 
         try:
             unit_checks = await self._run_unit_tests(project_path)
@@ -112,7 +110,7 @@ class RuntimeValidator:
     # Individual checks
     # ---------------------------------------------------------------------- #
 
-    async def _run_unit_tests(self, project_path: str) -> List[ValidationCheck]:
+    async def _run_unit_tests(self, project_path: str) -> list[ValidationCheck]:
         """Run pytest over tests/unit/ with JSON report output."""
         report_path = "/tmp/forge_unit_results.json"
         tests_dir = Path(project_path) / "tests" / "unit"
@@ -143,7 +141,7 @@ class RuntimeValidator:
         elapsed = int((time.monotonic() - t0) * 1000)
         return self._parse_pytest_json(report_path, "unit tests", elapsed)
 
-    async def _run_integration_tests(self, project_path: str) -> List[ValidationCheck]:
+    async def _run_integration_tests(self, project_path: str) -> list[ValidationCheck]:
         """Run pytest over tests/integration/ with JSON report output."""
         report_path = "/tmp/forge_integration_results.json"
         tests_dir = Path(project_path) / "tests" / "integration"
@@ -194,7 +192,7 @@ class RuntimeValidator:
         )
         elapsed = int((time.monotonic() - t0) * 1000)
 
-        coverage_data: Dict[str, Any] = {}
+        coverage_data: dict[str, Any] = {}
         try:
             with open("/tmp/forge_coverage.json") as f:
                 coverage_data = json.load(f)
@@ -232,7 +230,7 @@ class RuntimeValidator:
         pct = coverage_data.get("totals", {}).get("percent_covered", 0.0)
         return check, float(pct)
 
-    async def _run_api_tests(self, project_path: str) -> List[ValidationCheck]:
+    async def _run_api_tests(self, project_path: str) -> list[ValidationCheck]:
         """Run API/e2e tests if they exist under tests/api/ or tests/e2e/."""
         for tests_subdir in ("api", "e2e"):
             tests_dir = Path(project_path) / "tests" / tests_subdir
@@ -272,7 +270,7 @@ class RuntimeValidator:
         report_path: str,
         suite_name: str,
         elapsed_ms: int = 0,
-    ) -> List[ValidationCheck]:
+    ) -> list[ValidationCheck]:
         """Parse a pytest-json-report file into ValidationCheck list."""
         try:
             with open(report_path) as f:
@@ -296,7 +294,7 @@ class RuntimeValidator:
         error_count = summary.get("error", 0)
         skipped_count = summary.get("skipped", 0)
 
-        checks: List[ValidationCheck] = []
+        checks: list[ValidationCheck] = []
 
         # Summary check
         if failed_count == 0 and error_count == 0:
@@ -306,10 +304,7 @@ class RuntimeValidator:
                     check_type="test",
                     name=suite_name,
                     status=ValidationStatus.PASSED,
-                    message=(
-                        f"{passed_count}/{total} tests passed, "
-                        f"{skipped_count} skipped."
-                    ),
+                    message=(f"{passed_count}/{total} tests passed, {skipped_count} skipped."),
                     details={"summary": summary},
                     duration_ms=elapsed_ms,
                 )
@@ -350,9 +345,7 @@ class RuntimeValidator:
                             "nodeid": test.get("nodeid"),
                             "duration": test.get("call", {}).get("duration", 0),
                         },
-                        duration_ms=int(
-                            test.get("call", {}).get("duration", 0) * 1000
-                        ),
+                        duration_ms=int(test.get("call", {}).get("duration", 0) * 1000),
                     )
                 )
 
@@ -360,7 +353,7 @@ class RuntimeValidator:
 
     def _check_coverage_threshold(
         self,
-        coverage_data: Dict[str, Any],
+        coverage_data: dict[str, Any],
         threshold: float = DEFAULT_COVERAGE_THRESHOLD,
     ) -> ValidationCheck:
         """Return a ValidationCheck evaluating overall coverage vs threshold."""

@@ -1,8 +1,9 @@
 """Shared pytest fixtures for FORGE test suite."""
+
 import asyncio
-import pytest
-from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 @pytest.fixture(scope="session")
@@ -17,17 +18,19 @@ def event_loop():
 def mock_llm_client():
     """Mock LLM client that returns predictable responses."""
     client = AsyncMock()
-    client.complete = AsyncMock(return_value=MagicMock(
-        content='{"industry": "manufacturing", "product_type": "crm", "platform": "web", '
-                '"core_features": ["contact management", "deal tracking", "invoicing"], '
-                '"deployment_target": "docker", "constraints": [], "integrations": [], '
-                '"target_users": "sales teams", "scale_requirements": "small team", '
-                '"security_requirements": [], "tech_preferences": {}, "timeline": "", "budget_range": ""}',
-        model="claude-sonnet-4-6",
-        input_tokens=100,
-        output_tokens=200,
-        stop_reason="end_turn",
-    ))
+    client.complete = AsyncMock(
+        return_value=MagicMock(
+            content='{"industry": "manufacturing", "product_type": "crm", "platform": "web", '
+            '"core_features": ["contact management", "deal tracking", "invoicing"], '
+            '"deployment_target": "docker", "constraints": [], "integrations": [], '
+            '"target_users": "sales teams", "scale_requirements": "small team", '
+            '"security_requirements": [], "tech_preferences": {}, "timeline": "", "budget_range": ""}',
+            model="claude-sonnet-4-6",
+            input_tokens=100,
+            output_tokens=200,
+            stop_reason="end_turn",
+        )
+    )
     client.stream_complete = AsyncMock(return_value=iter([]))
     return client
 
@@ -61,14 +64,20 @@ def mock_db_session():
 @pytest.fixture
 def sample_project_intent():
     """Sample ProjectIntent for testing."""
-    from system.core.intent.schemas import ProjectIntent, IntentStatus
-    from system.shared.models import Platform, DeployTarget
+    from system.core.intent.schemas import IntentStatus, ProjectIntent
+    from system.shared.models import DeployTarget, Platform
+
     return ProjectIntent(
         raw_prompt="Build a CRM for marble suppliers",
         industry="manufacturing",
         product_type="crm",
         platform=Platform.WEB,
-        core_features=["contact management", "deal tracking", "invoice generation", "inventory management"],
+        core_features=[
+            "contact management",
+            "deal tracking",
+            "invoice generation",
+            "inventory management",
+        ],
         deployment_target=DeployTarget.DOCKER,
         constraints=["must support multi-tenancy"],
         integrations=["stripe", "email"],
@@ -88,7 +97,8 @@ def sample_project_intent():
 def sample_task_node():
     """Sample TaskNode for testing agent execution."""
     from system.core.orchestration.task_schemas import TaskNode
-    from system.shared.models import AgentType, TaskStatus, ExecutionPhase, Priority
+    from system.shared.models import AgentType, ExecutionPhase, Priority, TaskStatus
+
     return TaskNode(
         task_id="task-test-001",
         name="Generate user authentication models",

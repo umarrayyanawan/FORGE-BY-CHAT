@@ -1,7 +1,8 @@
 """Semantic memory — stores facts and knowledge about the project using vector similarity."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from system.core.memory.schemas import MemoryEntry, MemoryType
 from system.observability.logging.logger import get_logger
@@ -15,17 +16,17 @@ class SemanticMemory:
     def __init__(self, db: Any = None, embedder: Any = None) -> None:
         self.db = db
         self.embedder = embedder
-        self._store: Dict[str, MemoryEntry] = {}
+        self._store: dict[str, MemoryEntry] = {}
 
     async def store(
         self,
         project_id: str,
         title: str,
         content: str,
-        tags: List[str] = [],
+        tags: list[str] = [],
         importance: float = 0.5,
     ) -> MemoryEntry:
-        embedding: Optional[List[float]] = None
+        embedding: list[float] | None = None
         if self.embedder:
             try:
                 embedding = await self.embedder.embed_text(content)
@@ -50,7 +51,7 @@ class SemanticMemory:
         project_id: str,
         query: str,
         limit: int = 5,
-    ) -> List[MemoryEntry]:
+    ) -> list[MemoryEntry]:
         """Return top-k memories ranked by importance (pgvector cosine in production)."""
         entries = [e for e in self._store.values() if e.project_id == project_id]
         return sorted(entries, key=lambda e: e.importance, reverse=True)[:limit]
@@ -66,7 +67,8 @@ class SemanticMemory:
     async def consolidate(self, project_id: str) -> None:
         """Remove low-importance duplicate memories."""
         to_remove = [
-            mid for mid, e in self._store.items()
+            mid
+            for mid, e in self._store.items()
             if e.project_id == project_id and e.importance < 0.1
         ]
         for mid in to_remove:

@@ -16,27 +16,22 @@ Usage::
 
 from __future__ import annotations
 
-import json
-import uuid
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+import uuid
 
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from system.core.orchestration.task_schemas import (
-    GenerateGraphRequest,
-    GraphStatusSummary,
     TaskGraph,
     TaskGraphUpdate,
     TaskNode,
     ValidationRule,
 )
-from system.core.planning.schemas import ArchitecturePlan, ServiceDefinition
+from system.core.planning.schemas import ArchitecturePlan
 from system.core.specification.schemas import ProjectSpec
 from system.observability.logging.logger import get_logger
-from system.shared.database import get_db, AsyncSessionLocal
+from system.shared.database import AsyncSessionLocal
 from system.shared.exceptions import OrchestrationError, ValidationError
 from system.shared.models import AgentType, ExecutionPhase, Priority, TaskStatus
 
@@ -47,7 +42,7 @@ logger = get_logger(__name__)
 # Helpers — token and duration estimation
 # ========================================================================== #
 
-_AGENT_TOKEN_ESTIMATES: Dict[str, int] = {
+_AGENT_TOKEN_ESTIMATES: dict[str, int] = {
     AgentType.ARCHITECT: 6144,
     AgentType.BACKEND: 8192,
     AgentType.FRONTEND: 6144,
@@ -78,9 +73,11 @@ def _make_task_id(phase: str, role: str, suffix: str) -> str:
     return f"{phase}:{role}:{suffix}"
 
 
-def _validation_rules_for_agent(agent_type: AgentType, output_artifacts: List[str]) -> List[ValidationRule]:
+def _validation_rules_for_agent(
+    agent_type: AgentType, output_artifacts: list[str]
+) -> list[ValidationRule]:
     """Build a sensible set of validation rules for a given agent type."""
-    rules: List[ValidationRule] = []
+    rules: list[ValidationRule] = []
 
     # File-exists checks for every expected output
     for artifact in output_artifacts:
@@ -140,7 +137,7 @@ class TaskGraphEngine:
         graph_id = str(uuid.uuid4())
         logger.info("generating_task_graph", project_id=project_id, graph_id=graph_id)
 
-        all_tasks: List[TaskNode] = []
+        all_tasks: list[TaskNode] = []
 
         # 1 – Specification phase tasks
         spec_tasks = self._build_specification_tasks(project_id, spec)
@@ -203,18 +200,36 @@ class TaskGraphEngine:
     # Phase task builders
     # ------------------------------------------------------------------ #
 
-    def _build_specification_tasks(
-        self, project_id: str, spec: ProjectSpec
-    ) -> List[TaskNode]:
+    def _build_specification_tasks(self, project_id: str, spec: ProjectSpec) -> list[TaskNode]:
         """One task per major specification component."""
-        tasks: List[TaskNode] = []
+        tasks: list[TaskNode] = []
 
         components = [
             ("prd", "Write Product Requirements Document", AgentType.ARCHITECT, ["docs/prd.md"]),
-            ("db_schema", "Design normalized database schema", AgentType.ARCHITECT, ["docs/schema.md"]),
-            ("api_contract", "Define REST API contract and OpenAPI spec", AgentType.ARCHITECT, ["docs/api.yaml"]),
-            ("ui_structure", "Define UI page and component structure", AgentType.ARCHITECT, ["docs/ui.md"]),
-            ("permissions", "Design RBAC permissions matrix", AgentType.ARCHITECT, ["docs/permissions.md"]),
+            (
+                "db_schema",
+                "Design normalized database schema",
+                AgentType.ARCHITECT,
+                ["docs/schema.md"],
+            ),
+            (
+                "api_contract",
+                "Define REST API contract and OpenAPI spec",
+                AgentType.ARCHITECT,
+                ["docs/api.yaml"],
+            ),
+            (
+                "ui_structure",
+                "Define UI page and component structure",
+                AgentType.ARCHITECT,
+                ["docs/ui.md"],
+            ),
+            (
+                "permissions",
+                "Design RBAC permissions matrix",
+                AgentType.ARCHITECT,
+                ["docs/permissions.md"],
+            ),
         ]
 
         for suffix, description, agent, artifacts in components:
@@ -251,15 +266,27 @@ class TaskGraphEngine:
         project_id: str,
         spec: ProjectSpec,
         arch: ArchitecturePlan,
-    ) -> List[TaskNode]:
+    ) -> list[TaskNode]:
         """Architecture planning tasks — one per planning concern."""
-        tasks: List[TaskNode] = []
+        tasks: list[TaskNode] = []
 
         arch_items = [
-            ("service_topology", "Define service topology and inter-service contracts", ["docs/architecture.md"]),
-            ("data_flow", "Map data flow and event streams between services", ["docs/data_flow.md"]),
+            (
+                "service_topology",
+                "Define service topology and inter-service contracts",
+                ["docs/architecture.md"],
+            ),
+            (
+                "data_flow",
+                "Map data flow and event streams between services",
+                ["docs/data_flow.md"],
+            ),
             ("infra_plan", "Plan infrastructure components and cloud resources", ["infra/plan.md"]),
-            ("security_arch", "Define security architecture and threat model", ["docs/security.md"]),
+            (
+                "security_arch",
+                "Define security architecture and threat model",
+                ["docs/security.md"],
+            ),
         ]
 
         for suffix, description, artifacts in arch_items:
@@ -295,14 +322,14 @@ class TaskGraphEngine:
         project_id: str,
         spec: ProjectSpec,
         arch: ArchitecturePlan,
-    ) -> List[TaskNode]:
+    ) -> list[TaskNode]:
         """Generate execution-phase tasks for every service in the architecture.
 
         For each backend service:  models, routes, services, tests
         For each frontend service: pages, components, state management
         For each infra service:    Dockerfile, K8s manifests, Terraform
         """
-        tasks: List[TaskNode] = []
+        tasks: list[TaskNode] = []
 
         # ---- Backend services ----
         for svc in arch.backend_services():
@@ -502,9 +529,9 @@ class TaskGraphEngine:
         project_id: str,
         spec: ProjectSpec,
         arch: ArchitecturePlan,
-    ) -> List[TaskNode]:
+    ) -> list[TaskNode]:
         """Verification-phase tasks: test runner, lint, type check, security scan."""
-        tasks: List[TaskNode] = []
+        tasks: list[TaskNode] = []
 
         verif_defs = [
             (
@@ -577,9 +604,9 @@ class TaskGraphEngine:
         project_id: str,
         spec: ProjectSpec,
         arch: ArchitecturePlan,
-    ) -> List[TaskNode]:
+    ) -> list[TaskNode]:
         """Deployment-phase tasks: build images, push, deploy, smoke test."""
-        tasks: List[TaskNode] = []
+        tasks: list[TaskNode] = []
 
         deploy_defs = [
             (
@@ -649,7 +676,7 @@ class TaskGraphEngine:
     # Dependency assignment
     # ------------------------------------------------------------------ #
 
-    def _calculate_dependencies(self, tasks: List[TaskNode]) -> List[TaskNode]:
+    def _calculate_dependencies(self, tasks: list[TaskNode]) -> list[TaskNode]:
         """Assign dependency edges between tasks.
 
         Dependency rules (in order of specificity):
@@ -672,10 +699,10 @@ class TaskGraphEngine:
         - All DEPLOYMENT tasks depend on all VERIFICATION tasks.
         """
         # Index tasks by task_id for O(1) lookup
-        task_map: Dict[str, TaskNode] = {t.task_id: t for t in tasks}
+        task_map: dict[str, TaskNode] = {t.task_id: t for t in tasks}
 
         # Group tasks by phase
-        by_phase: Dict[str, List[str]] = defaultdict(list)
+        by_phase: dict[str, list[str]] = defaultdict(list)
         for t in tasks:
             by_phase[t.phase].append(t.task_id)
 
@@ -685,7 +712,7 @@ class TaskGraphEngine:
         verif_ids = by_phase[ExecutionPhase.VERIFICATION]
         deploy_ids = by_phase[ExecutionPhase.DEPLOYMENT]
 
-        def _add_deps(task_id: str, dep_ids: List[str]) -> None:
+        def _add_deps(task_id: str, dep_ids: list[str]) -> None:
             task = task_map.get(task_id)
             if task is None:
                 return
@@ -715,7 +742,7 @@ class TaskGraphEngine:
 
         # ---- Intra-backend task ordering ----
         # Find all backend task_ids and group by service
-        backend_by_svc: Dict[str, Dict[str, str]] = defaultdict(dict)
+        backend_by_svc: dict[str, dict[str, str]] = defaultdict(dict)
         for tid in exec_ids:
             task = task_map[tid]
             if task.agent_type == AgentType.BACKEND:
@@ -727,7 +754,7 @@ class TaskGraphEngine:
                     underscore_idx = svc_suffix.rfind("_")
                     if underscore_idx != -1:
                         svc = svc_suffix[:underscore_idx]
-                        suffix = svc_suffix[underscore_idx + 1:]
+                        suffix = svc_suffix[underscore_idx + 1 :]
                         backend_by_svc[svc][suffix] = tid
 
         for svc, suffix_map in backend_by_svc.items():
@@ -749,7 +776,7 @@ class TaskGraphEngine:
                     _add_deps(suffix_map["tests"], [suffix_map["services"]])
 
         # ---- Intra-frontend task ordering ----
-        frontend_by_svc: Dict[str, Dict[str, str]] = defaultdict(dict)
+        frontend_by_svc: dict[str, dict[str, str]] = defaultdict(dict)
         for tid in exec_ids:
             task = task_map[tid]
             if task.agent_type == AgentType.FRONTEND:
@@ -759,7 +786,7 @@ class TaskGraphEngine:
                     underscore_idx = svc_suffix.rfind("_")
                     if underscore_idx != -1:
                         svc = svc_suffix[:underscore_idx]
-                        suffix = svc_suffix[underscore_idx + 1:]
+                        suffix = svc_suffix[underscore_idx + 1 :]
                         frontend_by_svc[svc][suffix] = tid
 
         for svc, suffix_map in frontend_by_svc.items():
@@ -774,7 +801,7 @@ class TaskGraphEngine:
                 _add_deps(suffix_map["state"], [suffix_map["api_client"]])
 
         # ---- Intra-infra task ordering ----
-        infra_tids: Dict[str, str] = {}
+        infra_tids: dict[str, str] = {}
         for tid in exec_ids:
             task = task_map[tid]
             if task.agent_type == AgentType.INFRA:
@@ -795,7 +822,7 @@ class TaskGraphEngine:
                 _add_deps(infra_tids["ci_cd"], prereqs)
 
         # ---- Intra-deployment ordering ----
-        deploy_tids: Dict[str, str] = {}
+        deploy_tids: dict[str, str] = {}
         for tid in deploy_ids:
             parts = tid.split(":")
             if len(parts) == 3:
@@ -817,7 +844,7 @@ class TaskGraphEngine:
     # Graph algorithms
     # ------------------------------------------------------------------ #
 
-    def _topological_sort(self, tasks: List[TaskNode]) -> List[List[str]]:
+    def _topological_sort(self, tasks: list[TaskNode]) -> list[list[str]]:
         """Kahn's algorithm — returns parallelizable execution levels.
 
         Each inner list is a set of task_ids that can run concurrently
@@ -826,10 +853,10 @@ class TaskGraphEngine:
         Raises:
             OrchestrationError: if a cycle is detected.
         """
-        task_map: Dict[str, TaskNode] = {t.task_id: t for t in tasks}
+        task_map: dict[str, TaskNode] = {t.task_id: t for t in tasks}
 
         # in-degree map
-        in_degree: Dict[str, int] = {tid: 0 for tid in task_map}
+        in_degree: dict[str, int] = {tid: 0 for tid in task_map}
         for task in tasks:
             for dep in task.dependencies:
                 if dep in in_degree:
@@ -844,12 +871,12 @@ class TaskGraphEngine:
                 if dep in task_map:
                     in_degree[task.task_id] += 1
 
-        levels: List[List[str]] = []
+        levels: list[list[str]] = []
         queue: deque[str] = deque(tid for tid, deg in in_degree.items() if deg == 0)
         processed = 0
 
         while queue:
-            level: List[str] = []
+            level: list[str] = []
             # Drain all nodes that are currently at in-degree 0 (same "wave")
             next_queue: deque[str] = deque()
             while queue:
@@ -874,7 +901,7 @@ class TaskGraphEngine:
 
         return levels
 
-    def _find_critical_path(self, tasks: List[TaskNode]) -> List[str]:
+    def _find_critical_path(self, tasks: list[TaskNode]) -> list[str]:
         """Find the critical path (longest dependency chain by estimated minutes).
 
         Uses a forward-pass / longest-path algorithm on the DAG.
@@ -882,15 +909,15 @@ class TaskGraphEngine:
         Returns:
             Ordered list of task_ids forming the critical path.
         """
-        task_map: Dict[str, TaskNode] = {t.task_id: t for t in tasks}
+        task_map: dict[str, TaskNode] = {t.task_id: t for t in tasks}
 
         # Duration for each task in minutes
-        durations: Dict[str, int] = {t.task_id: _estimate_task_minutes(t) for t in tasks}
+        durations: dict[str, int] = {t.task_id: _estimate_task_minutes(t) for t in tasks}
 
         # earliest_finish[tid] = earliest time this task can complete
-        earliest_finish: Dict[str, float] = {}
+        earliest_finish: dict[str, float] = {}
         # predecessor on critical path
-        predecessor: Dict[str, Optional[str]] = {}
+        predecessor: dict[str, str | None] = {}
 
         # Process in topological order
         try:
@@ -908,7 +935,7 @@ class TaskGraphEngine:
                 else:
                     # latest finish of all deps
                     max_dep_finish: float = 0.0
-                    best_dep: Optional[str] = None
+                    best_dep: str | None = None
                     for dep_id in task.dependencies:
                         dep_finish = earliest_finish.get(dep_id, 0.0)
                         if dep_finish > max_dep_finish:
@@ -924,8 +951,8 @@ class TaskGraphEngine:
         end_tid = max(earliest_finish, key=lambda tid: earliest_finish[tid])
 
         # Trace back through predecessors
-        path: List[str] = []
-        current: Optional[str] = end_tid
+        path: list[str] = []
+        current: str | None = end_tid
         while current is not None:
             path.append(current)
             current = predecessor.get(current)
@@ -933,14 +960,14 @@ class TaskGraphEngine:
         path.reverse()
         return path
 
-    def _estimate_duration(self, tasks: List[TaskNode]) -> int:
+    def _estimate_duration(self, tasks: list[TaskNode]) -> int:
         """Estimate total wall-clock minutes assuming parallelism within each level."""
         try:
             levels = self._topological_sort(tasks)
         except OrchestrationError:
             return sum(_estimate_task_minutes(t) for t in tasks)
 
-        task_map: Dict[str, TaskNode] = {t.task_id: t for t in tasks}
+        task_map: dict[str, TaskNode] = {t.task_id: t for t in tasks}
         total = 0
         for level in levels:
             level_max = max(
@@ -966,7 +993,7 @@ class TaskGraphEngine:
             ValidationError: on any structural problem.
             OrchestrationError: on cycle detection.
         """
-        task_ids: Set[str] = {t.task_id for t in graph.tasks}
+        task_ids: set[str] = {t.task_id for t in graph.tasks}
 
         for task in graph.tasks:
             for dep_id in task.dependencies:
@@ -1043,7 +1070,7 @@ class TaskGraphEngine:
             await session.commit()
         logger.info("task_graph_persisted", graph_id=graph.graph_id)
 
-    async def load_graph(self, graph_id: str) -> Optional[TaskGraph]:
+    async def load_graph(self, graph_id: str) -> TaskGraph | None:
         """Load a task graph from PostgreSQL by graph_id.
 
         Returns:
@@ -1121,8 +1148,8 @@ class TaskGraphEngine:
     def get_ready_tasks(
         self,
         graph: TaskGraph,
-        completed_task_ids: Optional[Set[str]] = None,
-    ) -> List[TaskNode]:
+        completed_task_ids: set[str] | None = None,
+    ) -> list[TaskNode]:
         """Return tasks that are PENDING and have all dependencies satisfied.
 
         Args:

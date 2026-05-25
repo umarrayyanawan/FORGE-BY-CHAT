@@ -13,12 +13,12 @@ Usage::
 
 from __future__ import annotations
 
-import json
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any
+import uuid
 
-from sqlalchemy import DateTime, String, Text, select
+from sqlalchemy import DateTime, String, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,7 +33,6 @@ from system.core.planning.schemas import (
     ScalabilityProfile,
     SecurityArchitecture,
     SecurityProfile,
-    ServiceDefinition,
 )
 from system.core.planning.stack_recommender import StackRecommender
 from system.core.planning.topology_engine import TopologyEngine
@@ -56,11 +55,9 @@ class ArchitecturePlanDB(Base):
 
     __tablename__ = "forge_architecture_plans"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    plan_json: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    plan_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
@@ -116,17 +113,13 @@ class ArchitectureEngine:
 
         try:
             # ---- Step 1: Recommend technology stack ---------------------
-            stack: Dict[str, str] = await self._stack_recommender.recommend(
-                spec.intent, spec
-            )
+            stack: dict[str, str] = await self._stack_recommender.recommend(spec.intent, spec)
             logger.info("Stack recommended", stack=stack)
 
             # ---- Step 2: Generate repo topology -------------------------
             topology: RepoTopology = await self._topology_engine.generate(spec, stack)
             dir_structure = self._topology_engine.generate_directory_structure(topology)
-            topology = topology.model_copy(
-                update={"directory_structure": dir_structure}
-            )
+            topology = topology.model_copy(update={"directory_structure": dir_structure})
             logger.info(
                 "Topology generated",
                 repo_type=topology.repo_type,
@@ -137,9 +130,7 @@ class ArchitectureEngine:
             infra: InfrastructurePlan = await self._planner.plan_infra(spec, stack)
 
             # ---- Step 4: Scalability assessment -------------------------
-            scalability: ScalabilityProfile = await self._planner.assess_scalability(
-                spec, stack
-            )
+            scalability: ScalabilityProfile = await self._planner.assess_scalability(spec, stack)
 
             # ---- Step 5: Security profile --------------------------------
             security: SecurityProfile = await self._planner.generate_security_profile(spec)
@@ -151,9 +142,7 @@ class ArchitectureEngine:
                 f"Deploy via {stack.get('infra', 'Docker')}",
                 f"Authenticate with {stack.get('auth', 'JWT')}",
             ]
-            adrs: List[Dict[str, str]] = await self._planner.generate_adr(
-                adr_decisions, stack
-            )
+            adrs: list[dict[str, str]] = await self._planner.generate_adr(adr_decisions, stack)
 
             # ---- Step 7: Mermaid diagram ---------------------------------
             diagram: str = await self._planner.generate_mermaid_diagram(topology)
@@ -163,7 +152,7 @@ class ArchitectureEngine:
             services = topology.services
 
             # Convert infra cloud services → InfraComponents
-            infra_components: List[InfraComponent] = [
+            infra_components: list[InfraComponent] = [
                 InfraComponent(
                     name=svc_name.lower().replace(" ", "_").replace("(", "").replace(")", ""),
                     component_type=_infer_component_type(svc_name),
@@ -272,11 +261,9 @@ class ArchitectureEngine:
         plan_json = json.loads(plan.model_dump_json())
 
         # Check for existing record
-        stmt = select(ArchitecturePlanDB).where(
-            ArchitecturePlanDB.project_id == plan.project_id
-        )
+        stmt = select(ArchitecturePlanDB).where(ArchitecturePlanDB.project_id == plan.project_id)
         result = await self._db.execute(stmt)
-        existing: Optional[ArchitecturePlanDB] = result.scalar_one_or_none()
+        existing: ArchitecturePlanDB | None = result.scalar_one_or_none()
 
         if existing:
             existing.plan_json = plan_json
@@ -299,16 +286,14 @@ class ArchitectureEngine:
     # Retrieval
     # ------------------------------------------------------------------
 
-    async def get_plan(self, project_id: str) -> Optional[ArchitecturePlan]:
+    async def get_plan(self, project_id: str) -> ArchitecturePlan | None:
         """Load an ArchitecturePlan from PostgreSQL by project_id.
 
         Returns None if no plan exists for the project.
         """
-        stmt = select(ArchitecturePlanDB).where(
-            ArchitecturePlanDB.project_id == project_id
-        )
+        stmt = select(ArchitecturePlanDB).where(ArchitecturePlanDB.project_id == project_id)
         result = await self._db.execute(stmt)
-        record: Optional[ArchitecturePlanDB] = result.scalar_one_or_none()
+        record: ArchitecturePlanDB | None = result.scalar_one_or_none()
 
         if record is None:
             return None
@@ -349,7 +334,7 @@ def _infer_component_type(service_name: str) -> str:
     return "storage"
 
 
-def _stack_to_deploy_target(stack: Dict[str, str]) -> DeployTarget:
+def _stack_to_deploy_target(stack: dict[str, str]) -> DeployTarget:
     """Map infra stack value to a DeployTarget enum."""
     infra = stack.get("infra", "docker").lower()
     if "kubernetes" in infra or "eks" in infra or "gke" in infra or "k8s" in infra:
@@ -365,9 +350,7 @@ def _stack_to_deploy_target(stack: Dict[str, str]) -> DeployTarget:
     return DeployTarget.DOCKER
 
 
-def _infer_db_strategy(
-    scalability: ScalabilityProfile, spec: ProjectSpec
-) -> str:
+def _infer_db_strategy(scalability: ScalabilityProfile, spec: ProjectSpec) -> str:
     """Infer database strategy from scalability profile and spec."""
     if scalability.database_scaling == "sharding":
         return "event-sourcing"

@@ -24,13 +24,12 @@ Usage
 
 from __future__ import annotations
 
-import asyncio
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from enum import StrEnum
+from functools import lru_cache
 import logging
 import time
-from abc import ABC, abstractmethod
-from enum import Enum
-from functools import lru_cache
-from typing import AsyncIterator, List, Optional
 
 import anthropic
 from tenacity import (
@@ -44,8 +43,8 @@ from system.config.settings import settings
 from system.shared.constants import (
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_TEMPERATURE,
-    MAX_TOKENS_PER_AGENT,
     MAX_AGENT_RETRIES,
+    MAX_TOKENS_PER_AGENT,
 )
 from system.shared.exceptions import AgentError, RateLimitError
 
@@ -57,7 +56,7 @@ logger = logging.getLogger(__name__)
 # ========================================================================== #
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(StrEnum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
 
@@ -132,24 +131,24 @@ class LLMClient(ABC):
     @abstractmethod
     async def complete(
         self,
-        messages: List[LLMMessage],
+        messages: list[LLMMessage],
         *,
         model: str = DEFAULT_LLM_MODEL,
         max_tokens: int = MAX_TOKENS_PER_AGENT,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
-        system: Optional[str] = None,
+        system: str | None = None,
     ) -> LLMResponse:
         """Request a non-streaming completion and return the full response."""
 
     @abstractmethod
     async def complete_with_retry(
         self,
-        messages: List[LLMMessage],
+        messages: list[LLMMessage],
         *,
         model: str = DEFAULT_LLM_MODEL,
         max_tokens: int = MAX_TOKENS_PER_AGENT,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
-        system: Optional[str] = None,
+        system: str | None = None,
         max_attempts: int = MAX_AGENT_RETRIES,
     ) -> LLMResponse:
         """complete() wrapped with exponential back-off retry logic."""
@@ -157,12 +156,12 @@ class LLMClient(ABC):
     @abstractmethod
     async def stream_complete(
         self,
-        messages: List[LLMMessage],
+        messages: list[LLMMessage],
         *,
         model: str = DEFAULT_LLM_MODEL,
         max_tokens: int = MAX_TOKENS_PER_AGENT,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
-        system: Optional[str] = None,
+        system: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield text chunks as they arrive from the model."""
 
@@ -182,7 +181,7 @@ class AnthropicClient(LLMClient):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         default_model: str = DEFAULT_LLM_MODEL,
     ) -> None:
         self._api_key = api_key or settings.anthropic_api_key
@@ -195,12 +194,12 @@ class AnthropicClient(LLMClient):
 
     async def complete(
         self,
-        messages: List[LLMMessage],
+        messages: list[LLMMessage],
         *,
         model: str = DEFAULT_LLM_MODEL,
         max_tokens: int = MAX_TOKENS_PER_AGENT,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
-        system: Optional[str] = None,
+        system: str | None = None,
     ) -> LLMResponse:
         """Non-streaming completion call.
 
@@ -229,9 +228,7 @@ class AnthropicClient(LLMClient):
 
         t0 = time.perf_counter()
         try:
-            response: anthropic.types.Message = await self._client.messages.create(
-                **kwargs
-            )
+            response: anthropic.types.Message = await self._client.messages.create(**kwargs)
         except anthropic.RateLimitError as exc:
             raise RateLimitError(
                 f"Anthropic rate limit exceeded: {exc}",
@@ -289,12 +286,12 @@ class AnthropicClient(LLMClient):
 
     async def complete_with_retry(
         self,
-        messages: List[LLMMessage],
+        messages: list[LLMMessage],
         *,
         model: str = DEFAULT_LLM_MODEL,
         max_tokens: int = MAX_TOKENS_PER_AGENT,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
-        system: Optional[str] = None,
+        system: str | None = None,
         max_attempts: int = MAX_AGENT_RETRIES,
     ) -> LLMResponse:
         """complete() with tenacity exponential back-off.
@@ -305,7 +302,7 @@ class AnthropicClient(LLMClient):
         Args:
             max_attempts: Total number of attempts (including the first).
         """
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
 
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(max_attempts),
@@ -343,12 +340,12 @@ class AnthropicClient(LLMClient):
 
     async def stream_complete(
         self,
-        messages: List[LLMMessage],
+        messages: list[LLMMessage],
         *,
         model: str = DEFAULT_LLM_MODEL,
         max_tokens: int = MAX_TOKENS_PER_AGENT,
         temperature: float = DEFAULT_LLM_TEMPERATURE,
-        system: Optional[str] = None,
+        system: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield text chunks as they arrive from the Anthropic streaming API.
 
@@ -379,7 +376,7 @@ class AnthropicClient(LLMClient):
     # Utility
     # ------------------------------------------------------------------ #
 
-    async def count_tokens(self, messages: List[LLMMessage], system: Optional[str] = None) -> int:
+    async def count_tokens(self, messages: list[LLMMessage], system: str | None = None) -> int:
         """Estimate token count for a message list without sending a completion.
 
         Uses the Anthropic token-counting endpoint when available; falls back

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from system.config.settings import settings
 from system.observability.logging.logger import get_logger
-from system.shared.exceptions import AuthenticationError, AuthorizationError
+from system.shared.exceptions import AuthenticationError
 
 logger = get_logger(__name__)
 
@@ -35,7 +34,7 @@ class TokenData(BaseModel):
 
     user_id: str
     email: str
-    roles: List[str] = Field(default_factory=list)
+    roles: list[str] = Field(default_factory=list)
     token_type: str = "access"
 
 
@@ -72,7 +71,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def _build_claims(data: dict, expire_delta: timedelta) -> dict:
     """Merge *data* with standard JWT claims and return the payload dict."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     return {
         **data,
         "iat": now,
@@ -82,7 +81,7 @@ def _build_claims(data: dict, expire_delta: timedelta) -> dict:
 
 def create_access_token(
     data: dict,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Mint a signed JWT access token.
 
@@ -112,7 +111,7 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
-def create_token_pair(user_id: str, email: str, roles: List[str]) -> Token:
+def create_token_pair(user_id: str, email: str, roles: list[str]) -> Token:
     """Create a matching access + refresh token pair for a user.
 
     Args:
@@ -191,7 +190,7 @@ security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> TokenData:
     """FastAPI dependency — validate the Bearer token and return :class:`TokenData`.
 
@@ -225,8 +224,8 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[TokenData]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> TokenData | None:
     """Like :func:`get_current_user` but returns ``None`` for unauthenticated requests."""
     if credentials is None:
         return None

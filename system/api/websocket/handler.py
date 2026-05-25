@@ -1,7 +1,8 @@
-from fastapi import WebSocket, WebSocketDisconnect, APIRouter, Query
-from typing import Dict, List, Optional
-import json
 import asyncio
+import json
+
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
 from system.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,7 +18,7 @@ class ConnectionManager:
 
     def __init__(self) -> None:
         # project_id -> list of active WebSocket connections
-        self.active: Dict[str, List[WebSocket]] = {}
+        self.active: dict[str, list[WebSocket]] = {}
 
     async def connect(self, ws: WebSocket, project_id: str) -> None:
         """Accept connection and register it under project_id."""
@@ -40,7 +41,7 @@ class ConnectionManager:
     async def broadcast(self, project_id: str, message: dict) -> None:
         """Send a message to all connected clients for a project."""
         connections = list(self.active.get(project_id, []))
-        dead: List[WebSocket] = []
+        dead: list[WebSocket] = []
         for ws in connections:
             try:
                 await ws.send_json(message)
@@ -62,7 +63,7 @@ class ConnectionManager:
         """Return number of active connections for a project."""
         return len(self.active.get(project_id, []))
 
-    def all_projects(self) -> List[str]:
+    def all_projects(self) -> list[str]:
         """Return list of project IDs with active connections."""
         return list(self.active.keys())
 
@@ -75,7 +76,7 @@ manager = ConnectionManager()
 async def websocket_pipeline(
     websocket: WebSocket,
     project_id: str,
-    token: Optional[str] = Query(default=None, description="Optional JWT bearer token"),
+    token: str | None = Query(default=None, description="Optional JWT bearer token"),
 ) -> None:
     """
     WebSocket endpoint for real-time pipeline event streaming.
@@ -94,6 +95,7 @@ async def websocket_pipeline(
     if token:
         try:
             from system.api.auth.jwt import verify_token
+
             verify_token(token)
         except Exception as exc:
             await websocket.close(code=4001, reason="Unauthorized")
@@ -158,7 +160,7 @@ async def websocket_pipeline(
                         msg_type=msg_type,
                     )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send heartbeat so client knows we're alive and to keep NAT alive
                 await manager.send(websocket, {"type": "heartbeat"})
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import math
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import Field, field_validator
 
@@ -31,7 +31,7 @@ class PaginationParams(BaseForgeModel):
         return (self.page - 1) * self.page_size
 
 
-class PaginatedResponse[T](BaseForgeModel):
+class PaginatedResponse(BaseForgeModel, Generic[T]):
     """Generic envelope for paginated list API responses."""
 
     items: list[Any] = Field(description="The current page of results")

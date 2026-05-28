@@ -149,75 +149,6 @@ jobs:
         run: |
           alembic upgrade head || echo "No migrations to run yet"
 
-      - name: Diagnose and report to PR
-        if: failure()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DATABASE_URL: postgresql+asyncpg://forge_test:forge_test@localhost:5432/forge_test
-          SECRET_KEY: test-secret-key-for-ci-only-32ch
-          ANTHROPIC_API_KEY: test-key
-          ENVIRONMENT: test
-        run: |
-          python3 - <<'PYEOF'
-          import subprocess, os, sys
-
-          def run(cmd):
-              try:
-                  r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
-                  return (r.stdout + r.stderr)[:2000]
-              except Exception as e:
-                  return f"ERROR: {e}"
-
-          py_ver   = run("python --version")
-          pkgs     = run("pip show pytest pytest-asyncio pydantic sqlalchemy anthropic coverage 2>/dev/null | grep -E '^(Name|Version):'")
-          collect  = run("pytest tests/unit/ --collect-only -q --tb=short --no-header")
-          nocover  = run("pytest tests/unit/ -m unit --no-cov --tb=long -q")
-
-          body = f"""## CI Diagnostic (Python 3.12 failure)
-          **Python:** {py_ver.strip()}
-
-          **Packages:**
-          ```
-          {pkgs.strip()}
-          ```
-          **Collection:**
-          ```
-          {collect[-1500:].strip()}
-          ```
-          **Run (no-cov):**
-          ```
-          {nocover[-1500:].strip()}
-          ```"""
-
-          import json, urllib.request
-          repo = os.environ.get("GITHUB_REPOSITORY", "umarrayyanawan/FORGE-BY-CHAT")
-          pr   = os.environ.get("GITHUB_REF", "").split("/")[-2]
-          token = os.environ.get("GITHUB_TOKEN", "")
-          # Try to get PR number from GITHUB_REF_NAME or event
-          pr_num = None
-          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-          if event_path:
-              try:
-                  with open(event_path) as f:
-                      ev = json.load(f)
-                  pr_num = ev.get("pull_request", {}).get("number")
-              except Exception:
-                  pass
-          if not pr_num:
-              sys.exit(0)
-          url = f"https://api.github.com/repos/{repo}/issues/{pr_num}/comments"
-          data = json.dumps({"body": body}).encode()
-          req = urllib.request.Request(url, data=data, headers={
-              "Authorization": f"token {token}",
-              "Content-Type": "application/json",
-          })
-          try:
-              urllib.request.urlopen(req)
-              print("Diagnostic comment posted to PR")
-          except Exception as e:
-              print(f"Failed to post comment: {e}")
-          PYEOF
-
       - name: Run unit tests
         env:
           DATABASE_URL: postgresql+asyncpg://forge_test:forge_test@localhost:5432/forge_test
@@ -240,6 +171,70 @@ jobs:
             --tb=short \
             -m "unit" \
             --junit-xml=test-results/unit-results.xml
+
+      - name: Diagnose and report to PR
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: postgresql+asyncpg://forge_test:forge_test@localhost:5432/forge_test
+          SECRET_KEY: test-secret-key-for-ci-only-32ch
+          ANTHROPIC_API_KEY: test-key
+          ENVIRONMENT: test
+        run: |
+          python3 - <<'PYEOF'
+import subprocess, os, sys, json, urllib.request
+
+def run(cmd):
+    try:
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=90)
+        out = (r.stdout + r.stderr).strip()
+        return out[-2000:] if len(out) > 2000 else out
+    except Exception as e:
+        return f"ERROR: {e}"
+
+py_ver  = run("python --version")
+pkgs    = run("pip show pytest pytest-asyncio pydantic sqlalchemy anthropic coverage 2>/dev/null | grep -E '^(Name|Version):'")
+collect = run("pytest tests/unit/ --collect-only -q --tb=short --no-header")
+nocover = run("pytest tests/unit/ -m unit --no-cov --tb=long -q")
+
+body = (
+    "## CI Diagnostic — Python 3.12 failure\n\n"
+    f"**Python:** `{py_ver}`\n\n"
+    "**Packages:**\n```\n" + pkgs + "\n```\n\n"
+    "**Collection output:**\n```\n" + collect[-1800:] + "\n```\n\n"
+    "**Run without coverage:**\n```\n" + nocover[-1800:] + "\n```\n"
+)
+
+event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+pr_num = None
+if event_path:
+    try:
+        with open(event_path) as f:
+            ev = json.load(f)
+        pr_num = ev.get("pull_request", {}).get("number")
+    except Exception:
+        pass
+
+if not pr_num:
+    print("No PR number found; printing diagnostic instead:")
+    print(body)
+    sys.exit(0)
+
+repo  = os.environ.get("GITHUB_REPOSITORY", "umarrayyanawan/FORGE-BY-CHAT")
+token = os.environ.get("GITHUB_TOKEN", "")
+url   = f"https://api.github.com/repos/{repo}/issues/{pr_num}/comments"
+data  = json.dumps({"body": body}).encode()
+req   = urllib.request.Request(url, data=data, headers={
+    "Authorization": f"token {token}",
+    "Content-Type": "application/json",
+})
+try:
+    urllib.request.urlopen(req)
+    print(f"Diagnostic comment posted to PR #{pr_num}")
+except Exception as e:
+    print(f"Failed to post comment: {e}")
+    print(body)
+PYEOF
 
       - name: Run integration tests
         if: success()

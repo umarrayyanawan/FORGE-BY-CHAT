@@ -149,6 +149,20 @@ jobs:
         run: |
           alembic upgrade head || echo "No migrations to run yet"
 
+      - name: Diagnose test environment
+        env:
+          DATABASE_URL: postgresql+asyncpg://forge_test:forge_test@localhost:5432/forge_test
+          SECRET_KEY: test-secret-key-for-ci-only-32ch
+          ANTHROPIC_API_KEY: test-key
+          ENVIRONMENT: test
+        run: |
+          python --version
+          pip show pydantic pydantic-settings sqlalchemy asyncpg pytest pytest-asyncio coverage pytest-cov 2>/dev/null | grep -E "^(Name|Version):"
+          echo "--- Collection check ---"
+          pytest tests/unit/ --collect-only -q --tb=short 2>&1 | tail -20 || true
+          echo "--- Quick run (no cov) ---"
+          pytest tests/unit/ -m "unit" --no-cov --tb=long -q 2>&1 | tail -40 || true
+
       - name: Run unit tests
         env:
           DATABASE_URL: postgresql+asyncpg://forge_test:forge_test@localhost:5432/forge_test

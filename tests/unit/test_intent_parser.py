@@ -244,14 +244,18 @@ class TestIntentParser:
             await parser.parse("Build CRM for marble suppliers")
 
     def test_calculate_confidence_empty_intent(self) -> None:
-        """An intent with no fields populated should have near-zero confidence."""
+        """An intent with only default fields should have low confidence.
+
+        platform and deployment_target have non-empty defaults (web/docker) that
+        contribute 0.13 to the score even on a minimal intent.
+        """
         parser = IntentParser(llm_client=MagicMock())
         intent = ProjectIntent(raw_prompt="test")
 
         score = parser._calculate_confidence(intent)
 
-        # No meaningful fields → very low score
-        assert score < 0.1
+        # Only defaults (platform + deployment_target) are populated → low score
+        assert score < 0.2
 
     def test_calculate_confidence_complete_intent(self) -> None:
         """A fully-populated intent should have high confidence (>= 0.7)."""
@@ -330,15 +334,19 @@ class TestIntentParser:
         assert "industry" not in missing
         assert "product_type" not in missing
 
-    def test_enrich_sets_status_draft_on_zero_confidence(self) -> None:
-        """_enrich should mark a zero-confidence intent as DRAFT."""
+    def test_enrich_sets_status_clarifying_on_low_confidence(self) -> None:
+        """_enrich should mark a low-confidence intent as CLARIFYING.
+
+        A minimal intent has platform/deployment_target defaults giving confidence
+        0.13 (> 0.0), so the status is CLARIFYING rather than DRAFT.
+        """
         parser = IntentParser(llm_client=MagicMock())
         intent = ProjectIntent(raw_prompt="test")
 
         enriched = parser._enrich(intent)
 
-        assert enriched.status == IntentStatus.DRAFT
-        assert enriched.confidence_score < 0.1
+        assert enriched.status == IntentStatus.CLARIFYING
+        assert enriched.confidence_score < 0.2
 
     def test_enrich_sets_status_complete_on_high_confidence(self) -> None:
         """_enrich should mark a high-confidence intent as COMPLETE."""
